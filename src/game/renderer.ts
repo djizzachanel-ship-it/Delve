@@ -2,9 +2,6 @@ import { GameEngineState, Enemy, MiningNode, Loot, Slash, FloatingText, Torch } 
 import { project } from './mine';
 import { TILE_SIZE, MAP_COLS, MAP_ROWS } from './config';
 import { renderEntityCanvas } from '../assetRegistry';
-import { renderWallTile, renderFloorTile, registerTileSprite, TILE_SPRITES } from './environmentRenderer';
-
-export { registerTileSprite, TILE_SPRITES };
 
 export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stats: { maxHealth: number }) => {
   ctx.fillStyle = '#020617';
@@ -19,7 +16,6 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
       ctx.save();
       ctx.translate(offsetX + shakeX, offsetY + shakeY);
 
-      const floorList: any[] = [];
       const renderList: any[] = [];
       
       const centerC = Math.floor(g.player.x / TILE_SIZE);
@@ -36,27 +32,13 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
           const cx = c * TILE_SIZE + TILE_SIZE/2;
           const cy = r * TILE_SIZE + TILE_SIZE/2;
           if (g.grid[r] && (g.grid[r][c] === 0 || g.grid[r][c] === 2)) {
-            floorList.push({ type: 'floor', x: cx, y: cy, z: (c + r), isRail: g.grid[r][c] === 2, data: { r, c } }); 
+            renderList.push({ type: 'floor', x: cx, y: cy, z: cx + cy - TILE_SIZE, isRail: g.grid[r][c] === 2, data: { r, c } }); 
           } else if (g.grid[r] && g.grid[r][c] === 1) {
             renderList.push({ type: 'wall', x: cx, y: cy, z: cx + cy, data: { r, c } });
           }
         }
       }
-
-      // Sort and render entire flat floor plane first (Pass 1: Seamless Floor Sheet)
-      floorList.sort((a, b) => a.z - b.z);
-      floorList.forEach(item => {
-        renderFloorTile(ctx, {
-          cx: item.x,
-          cy: item.y,
-          r: item.data?.r ?? Math.floor(item.y / TILE_SIZE),
-          c: item.data?.c ?? Math.floor(item.x / TILE_SIZE),
-          isRail: item.isRail,
-          grid: g.grid
-        });
-      });
       
-      // Pass 2: Monolithic Walls and Entities sorted by depth (Painter's Algorithm)
       renderList.push({ type: 'cart', x: g.cart.x, y: g.cart.y, z: g.cart.x + g.cart.y });
       renderList.push({ type: 'player', x: g.player.x, y: g.player.y, z: g.player.x + g.player.y, data: g.player });
       g.nodes.forEach(n => renderList.push({ type: 'node', x: n.x, y: n.y, z: n.x + n.y, data: n }));
@@ -71,6 +53,647 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
       const hash2D = (x: number, y: number) => {
         const val = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
         return val - Math.floor(val);
+      };
+
+      // -------------------------------------------------------------
+      // 1. CARVED SUBTERRANEAN STONE WALLS & MINING CLIFFS
+      // -------------------------------------------------------------
+      const drawRockWall = (cx: number, cy: number, r: number, c: number, h: number, alpha: number) => {
+        ctx.globalAlpha = alpha;
+
+        const isWall = (rr: number, cc: number) => {
+          if (rr < 0 || rr >= MAP_ROWS || cc < 0 || cc >= MAP_COLS) return true;
+          return g.grid[rr] && g.grid[rr][cc] === 1;
+        };
+
+        const openS = !isWall(r + 1, c);
+        const openE = !isWall(r, c + 1);
+        const openW = !isWall(r, c - 1);
+        const openN = !isWall(r - 1, c);
+        const openSE = !isWall(r + 1, c + 1);
+        const openSW = !isWall(r + 1, c - 1);
+        const isDeepInterior = !openS && !openE && !openW && !openN && !openSE && !openSW;
+
+        const s = TILE_SIZE / 2;
+        const { x: ix, y: iy } = project(cx, cy);
+
+        // Deterministic variation hashes for this tile
+        const h0 = hash2D(c * 17.3 + 11, r * 31.7 + 19);
+        const h1 = hash2D(c * 53.9 + 23, r * 13.1 + 47);
+        const h2 = hash2D(c * 79.1 + 37, r * 67.3 + 83);
+
+        // Diamond vertices at ground level
+        const pTop = { x: ix, y: iy - s };
+        const pRight = { x: ix + 2 * s, y: iy };
+        const pBottom = { x: ix, y: iy + s };
+        const pLeft = { x: ix - 2 * s, y: iy };
+
+        // Elevated diamond vertices for top cap
+        const wallH = h;
+        const cTop = { x: pTop.x, y: pTop.y - wallH };
+        const cRight = { x: pRight.x, y: pRight.y - wallH };
+        const cBottom = { x: pBottom.x, y: pBottom.y - wallH };
+        const cLeft = { x: pLeft.x, y: pLeft.y - wallH };
+
+        // -----------------------------------------------------------
+        // A. WALL-TO-FLOOR AMBIENT OCCLUSION (Soft grounding contact shadow)
+        // -----------------------------------------------------------
+        if (openS || openSW || openW || openSE || openE) {
+          ctx.save();
+          // South-West contact shadow
+          if (openS || openSW || openW) {
+            const gradSW = ctx.createLinearGradient(pLeft.x, pLeft.y, pBottom.x, pBottom.y + 12);
+            gradSW.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+            gradSW.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.beginPath();
+            ctx.moveTo(pLeft.x, pLeft.y);
+            ctx.lineTo(pBottom.x, pBottom.y);
+            ctx.lineTo(pBottom.x - 6, pBottom.y + 10);
+            ctx.lineTo(pLeft.x - 6, pLeft.y + 10);
+            ctx.closePath();
+            ctx.fillStyle = gradSW;
+            ctx.fill();
+          }
+          // South-East contact shadow
+          if (openS || openSE || openE) {
+            const gradSE = ctx.createLinearGradient(pBottom.x, pBottom.y, pRight.x + 6, pRight.y + 12);
+            gradSE.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+            gradSE.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.beginPath();
+            ctx.moveTo(pBottom.x, pBottom.y);
+            ctx.lineTo(pRight.x, pRight.y);
+            ctx.lineTo(pRight.x + 6, pRight.y + 10);
+            ctx.lineTo(pBottom.x + 6, pBottom.y + 10);
+            ctx.closePath();
+            ctx.fillStyle = gradSE;
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+
+        // -----------------------------------------------------------
+        // B. SOUTH-WEST CLIFF FACE (Left front wall face)
+        // -----------------------------------------------------------
+        if (openS || openSW || openW) {
+          // 3-layer stone strata for rich volumetric rock look
+          const layers = 3;
+          for (let l = 0; l < layers; l++) {
+            const t1 = l / layers;
+            const t2 = (l + 1) / layers;
+            const y1L = pLeft.y - wallH * (1 - t1);
+            const y2L = pLeft.y - wallH * (1 - t2);
+            const y1B = pBottom.y - wallH * (1 - t1);
+            const y2B = pBottom.y - wallH * (1 - t2);
+
+            ctx.beginPath();
+            ctx.moveTo(pLeft.x, y1L);
+            ctx.lineTo(pBottom.x, y1B);
+            ctx.lineTo(pBottom.x, y2B);
+            ctx.lineTo(pLeft.x, y2L);
+            ctx.closePath();
+
+            // Layer shading: illuminated from top-left, darker towards base
+            const baseCol = l === 0 ? '#334155' : l === 1 ? '#273444' : '#1e293b';
+            ctx.fillStyle = baseCol;
+            ctx.fill();
+
+            // Horizontal rock strata groove
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(pLeft.x, y2L);
+            ctx.lineTo(pBottom.x, y2B);
+            ctx.stroke();
+
+            // Highlight top ridge of stone layer
+            ctx.strokeStyle = l === 0 ? '#475569' : '#334155';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(pLeft.x, y1L + 0.5);
+            ctx.lineTo(pBottom.x, y1B + 0.5);
+            ctx.stroke();
+          }
+
+          // Vertical masonry chisel seam
+          const seamT = 0.45 + (h0 - 0.5) * 0.2;
+          const sx = pLeft.x * (1 - seamT) + pBottom.x * seamT;
+          const syTop = cLeft.y * (1 - seamT) + cBottom.y * seamT;
+          const syBot = pLeft.y * (1 - seamT) + pBottom.y * seamT;
+          ctx.strokeStyle = '#141d2b';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(sx, syTop);
+          ctx.lineTo(sx + (h1 - 0.5) * 4, syBot);
+          ctx.stroke();
+
+          // Outcrop perimeter stroke
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(cLeft.x, cLeft.y);
+          ctx.lineTo(cBottom.x, cBottom.y);
+          ctx.lineTo(pBottom.x, pBottom.y);
+          ctx.lineTo(pLeft.x, pLeft.y);
+          ctx.closePath();
+          ctx.stroke();
+        }
+
+        // -----------------------------------------------------------
+        // C. SOUTH-EAST CLIFF FACE (Right front wall face - Shaded)
+        // -----------------------------------------------------------
+        if (openS || openSE || openE) {
+          const layers = 3;
+          for (let l = 0; l < layers; l++) {
+            const t1 = l / layers;
+            const t2 = (l + 1) / layers;
+            const y1B = pBottom.y - wallH * (1 - t1);
+            const y2B = pBottom.y - wallH * (1 - t2);
+            const y1R = pRight.y - wallH * (1 - t1);
+            const y2R = pRight.y - wallH * (1 - t2);
+
+            ctx.beginPath();
+            ctx.moveTo(pBottom.x, y1B);
+            ctx.lineTo(pRight.x, y1R);
+            ctx.lineTo(pRight.x, y2R);
+            ctx.lineTo(pBottom.x, y2B);
+            ctx.closePath();
+
+            // Shaded face: darker slate/charcoal tones
+            const baseCol = l === 0 ? '#1f2937' : l === 1 ? '#18202c' : '#111823';
+            ctx.fillStyle = baseCol;
+            ctx.fill();
+
+            // Strata seam line
+            ctx.strokeStyle = '#0a0f18';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(pBottom.x, y2B);
+            ctx.lineTo(pRight.x, y2R);
+            ctx.stroke();
+
+            // Subtle top highlight
+            ctx.strokeStyle = '#273444';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(pBottom.x, y1B + 0.5);
+            ctx.lineTo(pRight.x, y1R + 0.5);
+            ctx.stroke();
+          }
+
+          // Vertical chisel crack
+          const seamT = 0.55 + (h1 - 0.5) * 0.2;
+          const sx = pBottom.x * (1 - seamT) + pRight.x * seamT;
+          const syTop = cBottom.y * (1 - seamT) + cRight.y * seamT;
+          const syBot = pBottom.y * (1 - seamT) + pRight.y * seamT;
+          ctx.strokeStyle = '#080d14';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(sx, syTop);
+          ctx.lineTo(sx + (h2 - 0.5) * 4, syBot);
+          ctx.stroke();
+
+          // Perimeter boundary
+          ctx.strokeStyle = '#090e17';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(cBottom.x, cBottom.y);
+          ctx.lineTo(cRight.x, cRight.y);
+          ctx.lineTo(pRight.x, pRight.y);
+          ctx.lineTo(pBottom.x, pBottom.y);
+          ctx.closePath();
+          ctx.stroke();
+        }
+
+        // -----------------------------------------------------------
+        // D. WALL TOP CAP (Isometric Plateau / Carved Slab)
+        // -----------------------------------------------------------
+        ctx.beginPath();
+        ctx.moveTo(cTop.x, cTop.y);
+        ctx.lineTo(cRight.x, cRight.y);
+        ctx.lineTo(cBottom.x, cBottom.y);
+        ctx.lineTo(cLeft.x, cLeft.y);
+        ctx.closePath();
+
+        // Top cap stone gradient (soft diagonal light from top-left)
+        const capGrad = ctx.createLinearGradient(cLeft.x, cTop.y, cRight.x, cBottom.y);
+        if (isDeepInterior) {
+          capGrad.addColorStop(0, '#192231');
+          capGrad.addColorStop(0.5, '#141c28');
+          capGrad.addColorStop(1, '#0e141e');
+        } else {
+          capGrad.addColorStop(0, '#38485e');
+          capGrad.addColorStop(0.4, '#2e3c4e');
+          capGrad.addColorStop(1, '#232f3f');
+        }
+        ctx.fillStyle = capGrad;
+        ctx.fill();
+
+        // Stone bevel highlight borders
+        ctx.strokeStyle = isDeepInterior ? '#101722' : '#475a74';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Diagonal inner rock grain / chiseled paver lines
+        if (!isDeepInterior) {
+          ctx.strokeStyle = 'rgba(71, 85, 105, 0.45)';
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(cLeft.x + (cBottom.x - cLeft.x) * 0.35, cLeft.y + (cBottom.y - cLeft.y) * 0.35);
+          ctx.lineTo(cTop.x + (cRight.x - cTop.x) * 0.35, cTop.y + (cRight.y - cTop.y) * 0.35);
+          ctx.stroke();
+
+          // Subtle stone fissures / cracks on top slab
+          if (h0 > 0.45) {
+            const crackX = cLeft.x * 0.4 + cRight.x * 0.6;
+            const crackY = cTop.y * 0.4 + cBottom.y * 0.6;
+            ctx.strokeStyle = '#18212d';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(crackX - 4, crackY - 2);
+            ctx.lineTo(crackX + 1, crackY + 1);
+            ctx.lineTo(crackX + 5, crackY - 1);
+            ctx.stroke();
+          }
+        }
+
+        // -----------------------------------------------------------
+        // E. GLOWING ACCENTS & ORE VEINS ON WALLS
+        // -----------------------------------------------------------
+        // 1. Embedded glowing crystals (Azure or Amethyst geodes)
+        if (h0 > 0.72 && (openS || openSW || openSE)) {
+          const gemX = (openS || openSW) 
+            ? (cLeft.x * 0.4 + cBottom.x * 0.6 + (h1 - 0.5) * 8)
+            : (cBottom.x * 0.4 + cRight.x * 0.6 + (h2 - 0.5) * 8);
+          const gemY = (openS || openSW)
+            ? (cLeft.y * 0.4 + cBottom.y * 0.6 + wallH * 0.35 + (h2 - 0.5) * 6)
+            : (cBottom.y * 0.4 + cRight.y * 0.6 + wallH * 0.35 + (h1 - 0.5) * 6);
+
+          const isAzure = h1 > 0.5;
+          const glowColor = isAzure ? 'rgba(56, 189, 248, 0.45)' : 'rgba(192, 132, 252, 0.45)';
+          const gemCoreColor = isAzure ? '#38bdf8' : '#c084fc';
+          const gemShineColor = isAzure ? '#e0f2fe' : '#faf5ff';
+
+          // Glow halo
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(gemX, gemY, 9, 0, Math.PI * 2);
+          ctx.fillStyle = glowColor;
+          ctx.fill();
+
+          // Sharp crystal cluster
+          ctx.fillStyle = gemCoreColor;
+          ctx.beginPath();
+          ctx.moveTo(gemX - 3, gemY + 3);
+          ctx.lineTo(gemX, gemY - 6);
+          ctx.lineTo(gemX + 3, gemY + 3);
+          ctx.closePath();
+          ctx.fill();
+
+          // Second crystal shard
+          ctx.beginPath();
+          ctx.moveTo(gemX + 1, gemY + 2);
+          ctx.lineTo(gemX + 5, gemY - 3);
+          ctx.lineTo(gemX + 6, gemY + 4);
+          ctx.closePath();
+          ctx.fill();
+
+          // Specular glint
+          ctx.fillStyle = gemShineColor;
+          ctx.fillRect(gemX - 1, gemY - 4, 1.5, 2.5);
+          ctx.restore();
+        }
+
+        // 2. Gold / Pyrite raw ore flecks in rock crevice
+        if (h2 > 0.78 && (openS || openW || openE)) {
+          const oreX = cBottom.x + (h0 - 0.5) * 16;
+          const oreY = cBottom.y + wallH * 0.45 + (h1 - 0.5) * 8;
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.arc(oreX, oreY, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fef08a';
+          ctx.fillRect(oreX - 0.5, oreY - 0.5, 1.5, 1.5);
+        }
+
+        // -----------------------------------------------------------
+        // F. TIMBER MINE SHAFT SUPPORT BEAMS (Wood struts on corner edges)
+        // -----------------------------------------------------------
+        if (h1 > 0.76 && (openS || openE) && !isDeepInterior) {
+          const tx = cBottom.x;
+          const ty = cBottom.y;
+          // Heavy vertical timber column
+          ctx.fillStyle = '#3a1f10';
+          ctx.fillRect(tx - 3.5, ty, 7, wallH);
+          // Highlight side
+          ctx.fillStyle = '#542d17';
+          ctx.fillRect(tx - 2, ty, 3.5, wallH);
+          // Dark wood grain lines
+          ctx.fillStyle = '#221107';
+          ctx.fillRect(tx - 3.5, ty, 7, 1.5);
+          ctx.fillRect(tx - 3.5, ty + wallH - 1.5, 7, 1.5);
+          // Heavy riveted iron mounting brackets
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(tx - 4.5, ty + 6, 9, 4);
+          ctx.fillRect(tx - 4.5, ty + wallH - 10, 9, 4);
+          // Iron rivets
+          ctx.fillStyle = '#94a3b8';
+          ctx.fillRect(tx - 3, ty + 7.5, 1.5, 1.5);
+          ctx.fillRect(tx + 1.5, ty + 7.5, 1.5, 1.5);
+          ctx.fillRect(tx - 3, ty + wallH - 8.5, 1.5, 1.5);
+          ctx.fillRect(tx + 1.5, ty + wallH - 8.5, 1.5, 1.5);
+        }
+
+        ctx.globalAlpha = 1;
+      };
+
+      // -------------------------------------------------------------
+      // 2. ATMOSPHERIC CAVERN FLOOR & 3D PRECISION RAILWAY
+      // -------------------------------------------------------------
+      const drawFloor = (cx: number, cy: number, r: number, c: number, isRail: boolean) => {
+        const { x: ix, y: iy } = project(cx, cy);
+        const s = TILE_SIZE / 2;
+
+        const h0 = hash2D(cx * 1.37 + 17, cy * 1.73 + 29);
+        const h1 = hash2D(cx * 2.91 + 43, cy * 3.19 + 71);
+        const h2 = hash2D(cx * 5.63 + 89, cy * 4.41 + 13);
+
+        // -----------------------------------------------------------
+        // A. ISOMETRIC STONE CAVERN FLOOR TILE
+        // -----------------------------------------------------------
+        ctx.beginPath(); 
+        ctx.moveTo(ix, iy - s); 
+        ctx.lineTo(ix + 2*s, iy); 
+        ctx.lineTo(ix, iy + s); 
+        ctx.lineTo(ix - 2*s, iy); 
+        ctx.closePath();
+        
+        // Deep stone flagstone tones with subtle variance
+        const floorBaseColor = h0 > 0.65 ? '#1a202c' : h0 > 0.3 ? '#161b26' : '#121620';
+        ctx.fillStyle = floorBaseColor;
+        ctx.fill();
+
+        // Subtle tile seam / mortar groove
+        ctx.strokeStyle = '#0b0f17'; 
+        ctx.lineWidth = 1; 
+        ctx.stroke();
+
+        // -----------------------------------------------------------
+        // B. FLOOR DETAILS: CRACKS, PUDDLES, STONES, MOSS
+        // -----------------------------------------------------------
+        // 1. Wet underground puddle with subtle reflection
+        if (h1 > 0.72) {
+          ctx.save();
+          ctx.beginPath();
+          const pudX = ix + (h0 - 0.5) * 24;
+          const pudY = iy + (h2 - 0.5) * 12;
+          ctx.ellipse(pudX, pudY, 9 + h0 * 6, 4.5 + h0 * 3, 0, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(7, 12, 22, 0.75)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+          // Water sheen glint
+          ctx.fillStyle = 'rgba(148, 163, 184, 0.25)';
+          ctx.fillRect(pudX - 3, pudY - 1, 4, 1.2);
+          ctx.restore();
+        }
+
+        // 2. Chiseled stone flagstone crack
+        if (h2 > 0.58) {
+          ctx.strokeStyle = 'rgba(10, 15, 24, 0.9)';
+          ctx.lineWidth = 1;
+          const crkX = ix + (h1 - 0.5) * 22;
+          const crkY = iy + (h0 - 0.5) * 12;
+          ctx.beginPath();
+          ctx.moveTo(crkX - 5, crkY - 2);
+          ctx.lineTo(crkX + 1, crkY + 1);
+          ctx.lineTo(crkX + 6, crkY - 1);
+          ctx.stroke();
+        }
+
+        // 3. Small stone pebble cluster
+        if (h0 > 0.45) {
+          const pebX = ix + (h2 - 0.5) * 26;
+          const pebY = iy + (h1 - 0.5) * 14;
+          // Pebble shadow
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(pebX - 2, pebY + 1, 5, 2);
+          // Pebble stone tops
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(pebX - 2, pebY - 1, 3, 2);
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(pebX + 1, pebY, 2.5, 2);
+        }
+
+        // 4. Subtle glowing cave lichen / moss speckles
+        if (h1 > 0.82) {
+          const mossX = ix + (h2 - 0.5) * 20;
+          const mossY = iy + (h0 - 0.5) * 10;
+          ctx.fillStyle = '#059669';
+          ctx.fillRect(mossX, mossY, 1.5, 1.5);
+          ctx.fillStyle = '#10b981';
+          ctx.fillRect(mossX + 2, mossY - 1, 1.2, 1.2);
+        }
+
+        // -----------------------------------------------------------
+        // C. VOLUMETRIC 3D RAILWAY SYSTEM WITH CONTACT SHADOWS
+        // -----------------------------------------------------------
+        if (isRail) {
+           // Detect track orientation through neighboring rail coordinates
+           const isN = g.grid[r - 1] && g.grid[r - 1][c] === 2;
+           const isNW = g.grid[r - 1] && g.grid[r - 1][c - 1] === 2;
+           const isNE = g.grid[r - 1] && g.grid[r - 1][c + 1] === 2;
+           const isS = g.grid[r + 1] && g.grid[r + 1][c] === 2;
+           const isSW = g.grid[r + 1] && g.grid[r + 1][c - 1] === 2;
+           const isSE = g.grid[r + 1] && g.grid[r + 1][c + 1] === 2;
+           const isW = g.grid[r] && g.grid[r][c - 1] === 2;
+           const isE = g.grid[r] && g.grid[r][c + 1] === 2;
+
+           // Calculate incoming and outgoing local track tangents
+           let inX = 0, inY = -TILE_SIZE;
+           if (isN) { inX = 0; inY = -TILE_SIZE; }
+           else if (isNW) { inX = -TILE_SIZE; inY = -TILE_SIZE; }
+           else if (isNE) { inX = TILE_SIZE; inY = -TILE_SIZE; }
+           else if (isW) { inX = -TILE_SIZE; inY = 0; }
+
+           let outX = 0, outY = TILE_SIZE;
+           if (isS) { outX = 0; outY = TILE_SIZE; }
+           else if (isSW) { outX = -TILE_SIZE; outY = TILE_SIZE; }
+           else if (isSE) { outX = TILE_SIZE; outY = TILE_SIZE; }
+           else if (isE) { outX = TILE_SIZE; outY = 0; }
+
+           const pIn = project(cx + inX * 0.5, cy + inY * 0.5);
+           const pCenter = { x: ix, y: iy };
+           const pOut = project(cx + outX * 0.5, cy + outY * 0.5);
+
+           // Track direction tangent vector in screen space
+           const tDx = pOut.x - pIn.x;
+           const tDy = pOut.y - pIn.y;
+           const tLen = Math.hypot(tDx, tDy) || 1;
+           const dirX = tDx / tLen;
+           const dirY = tDy / tLen;
+           // Normal perpendicular vector in screen space
+           const normX = -dirY;
+           const normY = dirX;
+
+           // 1. WIDE CONTACT SHADOW UNDER GRAVEL BED
+           const ballastW = 21;
+           ctx.save();
+           ctx.beginPath();
+           ctx.moveTo(pIn.x + normX * (ballastW + 4), pIn.y + normY * (ballastW + 4) + 3);
+           ctx.lineTo(pOut.x + normX * (ballastW + 4), pOut.y + normY * (ballastW + 4) + 3);
+           ctx.lineTo(pOut.x - normX * (ballastW + 4), pOut.y - normY * (ballastW + 4) + 3);
+           ctx.lineTo(pIn.x - normX * (ballastW + 4), pIn.y - normY * (ballastW + 4) + 3);
+           ctx.closePath();
+           ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+           ctx.fill();
+           ctx.restore();
+
+           // 2. CRUSHED BASALT BALLAST BED (Dark gravel trench)
+           ctx.beginPath();
+           ctx.moveTo(pIn.x + normX * ballastW, pIn.y + normY * ballastW);
+           ctx.lineTo(pCenter.x + normX * (ballastW + 1), pCenter.y + normY * (ballastW + 1));
+           ctx.lineTo(pOut.x + normX * ballastW, pOut.y + normY * ballastW);
+           ctx.lineTo(pOut.x - normX * ballastW, pOut.y - normY * ballastW);
+           ctx.lineTo(pCenter.x - normX * (ballastW + 1), pCenter.y - normY * (ballastW + 1));
+           ctx.lineTo(pIn.x - normX * ballastW, pIn.y - normY * ballastW);
+           ctx.closePath();
+           ctx.fillStyle = '#0f141d';
+           ctx.fill();
+           ctx.strokeStyle = '#090d14';
+           ctx.lineWidth = 1;
+           ctx.stroke();
+
+           // Ballast stone grains & gravel rubble
+           for (let k = -2; k <= 2; k++) {
+              const gx = ix + dirX * (k * 14) + normX * ((hash2D(cx + k*7, cy) - 0.5) * 26);
+              const gy = iy + dirY * (k * 14) + normY * ((hash2D(cy + k*9, cx) - 0.5) * 26);
+              ctx.fillStyle = k % 2 === 0 ? '#080c12' : '#1f2937';
+              ctx.fillRect(gx, gy, 2.5, 2);
+           }
+
+           // 3. 3D WOODEN TIE SLEEPERS
+           const sleeperOffsets = [-0.62, -0.22, 0.22, 0.62];
+           const sleeperHalfLen = 17;
+           const sleeperDepth = 3.5;
+
+           sleeperOffsets.forEach((tOffset, sIdx) => {
+              const stX = ix + dirX * (tOffset * (tLen * 0.45));
+              const stY = iy + dirY * (tOffset * (tLen * 0.45));
+
+              const pL = { x: stX + normX * sleeperHalfLen, y: stY + normY * sleeperHalfLen };
+              const pR = { x: stX - normX * sleeperHalfLen, y: stY - normY * sleeperHalfLen };
+              const tThickX = dirX * 3.5;
+              const tThickY = dirY * 3.5;
+
+              // Sleeper drop shadow
+              ctx.beginPath();
+              ctx.moveTo(pL.x + tThickX, pL.y + tThickY + 2);
+              ctx.lineTo(pR.x + tThickX, pR.y + tThickY + 2);
+              ctx.lineTo(pR.x - tThickX, pR.y - tThickY + 2);
+              ctx.lineTo(pL.x - tThickX, pL.y - tThickY + 2);
+              ctx.closePath();
+              ctx.fillStyle = 'rgba(0,0,0,0.45)';
+              ctx.fill();
+
+              // Sleeper vertical front face (deep shadow)
+              ctx.beginPath();
+              ctx.moveTo(pL.x - tThickX, pL.y - tThickY);
+              ctx.lineTo(pR.x - tThickX, pR.y - tThickY);
+              ctx.lineTo(pR.x - tThickX, pR.y - tThickY + sleeperDepth);
+              ctx.lineTo(pL.x - tThickX, pL.y - tThickY + sleeperDepth);
+              ctx.closePath();
+              ctx.fillStyle = '#1c0f06';
+              ctx.fill();
+
+              // Sleeper top face (weathered dark timber)
+              ctx.beginPath();
+              ctx.moveTo(pL.x - tThickX, pL.y - tThickY);
+              ctx.lineTo(pL.x + tThickX, pL.y + tThickY);
+              ctx.lineTo(pR.x + tThickX, pR.y + tThickY);
+              ctx.lineTo(pR.x - tThickX, pR.y - tThickY);
+              ctx.closePath();
+              ctx.fillStyle = (sIdx % 2 === 0) ? '#3c1d09' : '#321807';
+              ctx.fill();
+              ctx.strokeStyle = '#180a02';
+              ctx.lineWidth = 0.8;
+              ctx.stroke();
+
+              // Top bevel highlight on light-facing edge
+              ctx.beginPath();
+              ctx.moveTo(pL.x + tThickX, pL.y + tThickY);
+              ctx.lineTo(pR.x + tThickX, pR.y + tThickY);
+              ctx.strokeStyle = '#542d13';
+              ctx.lineWidth = 0.8;
+              ctx.stroke();
+
+              // Heavy iron tie plates & spikes
+              [-10, 10].forEach(plateDist => {
+                 const plX = stX + normX * plateDist;
+                 const plY = stY + normY * plateDist;
+                 ctx.fillStyle = '#0f172a';
+                 ctx.fillRect(plX - 2.5, plY - 2.5, 5, 5);
+                 ctx.fillStyle = '#64748b';
+                 ctx.fillRect(plX - 1.5, plY - 1.5, 1.5, 1.5);
+                 ctx.fillRect(plX + 1, plY + 1, 1.5, 1.5);
+              });
+           });
+
+           // 4. VOLUMETRIC DUAL POLISHED STEEL RAILS
+           const railGauge = 10.5;
+           const railHeight = 4.5;
+
+           [-railGauge, railGauge].forEach(gaugeOffset => {
+              const rInX = pIn.x + normX * gaugeOffset;
+              const rInY = pIn.y + normY * gaugeOffset;
+              const rMidX = pCenter.x + normX * gaugeOffset;
+              const rMidY = pCenter.y + normY * gaugeOffset;
+              const rOutX = pOut.x + normX * gaugeOffset;
+              const rOutY = pOut.y + normY * gaugeOffset;
+
+              // Rail cast shadow
+              ctx.beginPath();
+              ctx.moveTo(rInX + 2, rInY + 2);
+              ctx.quadraticCurveTo(rMidX + 2, rMidY + 2, rOutX + 2, rOutY + 2);
+              ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+              ctx.lineWidth = 3.5;
+              ctx.stroke();
+
+              // Rail base flange
+              ctx.beginPath();
+              ctx.moveTo(rInX, rInY);
+              ctx.quadraticCurveTo(rMidX, rMidY, rOutX, rOutY);
+              ctx.strokeStyle = '#1e293b';
+              ctx.lineWidth = 4;
+              ctx.stroke();
+
+              // Rail vertical web (shaded side)
+              ctx.beginPath();
+              ctx.moveTo(rInX, rInY);
+              ctx.quadraticCurveTo(rMidX, rMidY, rOutX, rOutY);
+              ctx.lineTo(rOutX, rOutY - railHeight);
+              ctx.quadraticCurveTo(rMidX, rMidY - railHeight, rInX, rInY - railHeight);
+              ctx.closePath();
+              ctx.fillStyle = '#0f172a';
+              ctx.fill();
+
+              // Rail head crown (polished steel)
+              ctx.beginPath();
+              ctx.moveTo(rInX, rInY - railHeight);
+              ctx.quadraticCurveTo(rMidX, rMidY - railHeight, rOutX, rOutY - railHeight);
+              ctx.strokeStyle = '#64748b';
+              ctx.lineWidth = 3;
+              ctx.stroke();
+
+              // Bright specular glint
+              ctx.beginPath();
+              ctx.moveTo(rInX, rInY - railHeight - 0.5);
+              ctx.quadraticCurveTo(rMidX, rMidY - railHeight - 0.5, rOutX, rOutY - railHeight - 0.5);
+              ctx.strokeStyle = '#f8fafc';
+              ctx.lineWidth = 1.2;
+              ctx.stroke();
+           });
+        }
       };
 
       // PLAYER WITH SWORD, ATTACK ANIMATION, AND RANGE INDICATOR
@@ -491,7 +1114,10 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
 
       renderList.forEach(item => {
         switch(item.type) {
-          case 'wall': {
+          case 'floor': 
+             drawFloor(item.x, item.y, item.data?.r ?? Math.floor(item.y / TILE_SIZE), item.data?.c ?? Math.floor(item.x / TILE_SIZE), item.isRail); 
+             break;
+          case 'wall': 
              const pIso = project(g.player.x, g.player.y);
              const wIso = project(item.x, item.y);
              const screenDist = Math.hypot(pIso.x - wIso.x, pIso.y - wIso.y);
@@ -500,17 +1126,8 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
              
              const r = item.data?.r ?? Math.floor(item.y / TILE_SIZE);
              const c = item.data?.c ?? Math.floor(item.x / TILE_SIZE);
-             renderWallTile(ctx, {
-               cx: item.x,
-               cy: item.y,
-               r,
-               c,
-               h: TILE_SIZE * 0.9,
-               alpha,
-               grid: g.grid
-             });
+             drawRockWall(item.x, item.y, r, c, TILE_SIZE * 0.9, alpha); 
              break;
-          }
           case 'cart': {
              const {x: cx, y: cy} = project(item.x, item.y);
              const nowT = Date.now();
