@@ -1,0 +1,8 @@
+{
+  "name": "DelveCraft",
+  "description": "An isometric RPG and town builder where you delve underground to mine resources and crush monsters, then build and expand a living surface settlement with day/night cycles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
