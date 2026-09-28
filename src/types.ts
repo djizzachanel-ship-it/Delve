@@ -12,10 +12,14 @@ export type ItemSlot =
 
 export type Rarity = 'common' | 'magic' | 'rare' | 'epic' | 'legendary';
 
+export type AffixCategory = 'offensive' | 'defensive' | 'utility';
+
 export interface ItemAffix {
   name: string;
   type: 'prefix' | 'suffix';
-  stat: 'health' | 'damage' | 'armor';
+  category: AffixCategory;
+  stat: string;
+  tier: number;
   value: number;
   description: string;
 }
@@ -26,17 +30,21 @@ export interface Item {
   baseName?: string;
   slot: ItemSlot;
   rarity: Rarity;
+  tier: number; // Item base tier (1-100)
   stats: {
     health: number;
     damage: number;
     armor: number;
+    // Expanded stats
     attackSpeed?: number;
     critChance?: number;
+    dodge?: number;
+    lifesteal?: number;
+    moveSpeed?: number;
+    miningSpeed?: number;
   };
-  prefix?: ItemAffix;
-  suffix?: ItemAffix;
-  level?: number;
-  // Set item affiliation
+  prefixes: ItemAffix[]; // Support multiple
+  suffixes: ItemAffix[];
   setId?: string;
   setName?: string;
 }

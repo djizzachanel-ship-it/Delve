@@ -8,23 +8,15 @@ import { ItemSlot } from '../types';
  * Prevents player from becoming fully immune, while keeping crafted armor highly impactful.
  */
 export function calculateDamageAgainstArmor(enemyDamage: number, armor: number, depth: number): number {
-  // Armor provides diminishing percentage damage reduction:
-  // Formula: armor / (armor + 32 + depth * 2.5)
-  // 10 armor: ~22% reduction
-  // 20 armor: ~35% reduction
-  // 35 armor: ~47% reduction
-  // 50 armor: ~56% reduction
-  const armorDR = armor / (armor + 32 + depth * 2.5);
-  
-  // Moderate flat soak: up to 18% of mob damage or 0.18 * armor
-  const flatSoak = Math.min(Math.floor(enemyDamage * 0.18), Math.floor(armor * 0.18));
-  const postSoak = Math.max(1, enemyDamage - flatSoak);
-  
-  const mitigated = Math.round(postSoak * (1 - armorDR));
+  // New Formula: damageTaken = damage * K / (K + armor)
+  // Armor provides diminishing percentage damage reduction, prevents 0 damage.
+  const K = 50;
+  const damageTaken = enemyDamage * K / (K + armor);
   
   // Minimum damage scales smoothly with depth so deeper floors stay challenging:
   const minFloor = Math.max(3, 2 + Math.floor(depth * 0.8));
-  return Math.max(minFloor, mitigated);
+  
+  return Math.max(minFloor, Math.round(damageTaken));
 }
 
 /**
