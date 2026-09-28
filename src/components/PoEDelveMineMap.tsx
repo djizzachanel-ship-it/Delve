@@ -31,13 +31,13 @@ const CELL_SIZE_Y = 140;
 const ORIGIN_X = 1600;
 const ORIGIN_Y = 160;
 
-// Хеш-функция для создания органических естественных смещений (Jitter)
+// Хеш-функция для создания стабильных органических смещений узлов
 const getNodeJitter = (gx: number, gy: number) => {
   if (gx === 0 && gy === 0) return { offsetX: 0, offsetY: 0 };
   const hashX = Math.sin(gx * 12.9898 + gy * 78.233) * 43758.5453;
-  const offsetX = ((Math.abs(hashX) % 1) - 0.5) * 50; 
+  const offsetX = ((Math.abs(hashX) % 1) - 0.5) * 45; 
   const hashY = Math.cos(gx * 35.123 + gy * 19.456) * 21941.1234;
-  const offsetY = ((Math.abs(hashY) % 1) - 0.5) * 40;
+  const offsetY = ((Math.abs(hashY) % 1) - 0.5) * 35;
   return { offsetX, offsetY };
 };
 
@@ -62,7 +62,7 @@ const createCurvedPath = (p1: { x: number; y: number }, p2: { x: number; y: numb
 
   let charCodeSum = 0;
   for (let i = 0; i < seed.length; i++) charCodeSum += seed.charCodeAt(i);
-  const bendAmount = (((charCodeSum % 40) - 20) * 1.2);
+  const bendAmount = (((charCodeSum % 30) - 15) * 1.2);
 
   const ctrlX = midX + normX * bendAmount;
   const ctrlY = midY + normY * bendAmount;
@@ -75,9 +75,11 @@ const NodeIconSvg: React.FC<{ type: DelveNodeType; color: string; opacity?: numb
 }) => {
   switch (type) {
     case 'ore': return <Pickaxe size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
-    case 'azurite': return <Gem size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
-    case 'currency': return <Sparkles size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
-    case 'items': return <Shield size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+    case 'metal': return <Shield size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+    case 'shards': return <Gem size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+    case 'treasure': return <Sparkles size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+    case 'monster_nest': return <Flame size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+    case 'secret_cache': return <Pickaxe size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
     case 'boss': return <Crown size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
     default: return <Pickaxe size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
   }
@@ -87,8 +89,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
   state,
   onSelectNodeAndStart,
   onReturnToTown,
-  onBuyModule,
-  canAffordModule,
   savedGrid,
   onUpdateGrid
 }) => {
@@ -109,9 +109,8 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
     return grid.currentCartNodeId;
   });
 
-  const [showLegend, setShowLegend] = useState(false);
-  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState<number>(1.0);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -266,7 +265,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
             <LocateFixed className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">К вагонетке</span>
           </button>
-          <button onClick={() => setShowLegend(v => !v)} className="p-1.5 bg-slate-800/90 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 ml-1"><HelpCircle className="w-4 h-4 text-sky-400" /></button>
         </div>
       </header>
 
@@ -337,7 +335,7 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
               </g>
             )}
 
-            {/* Узлы (Nodes) */}
+            {/* Узлы (Nodes) - Без дёргания hover */}
             <g className="delve-nodes">
               {(Object.values(grid.nodes) as DelveNode[]).map(node => {
                 const pos = getNodePos(node.gridX, node.gridY);
@@ -352,9 +350,9 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                     key={node.id}
                     transform={`translate(${pos.x}, ${pos.y})`}
                     onClick={() => handleSelectNode(node)}
-                    className="cursor-pointer transition-transform hover:scale-110"
+                    className="cursor-pointer group"
                   >
-                    {node.visited && <circle r="36" fill="url(#clearedAura)" />}
+                    {node.visited && <circle r="36" fill="url(#clearedAura)" className="pointer-events-none" />}
                     
                     <circle
                       r="22"
@@ -362,9 +360,10 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                       stroke={isSelected ? "#38bdf8" : (isCurrentCart ? "#f59e0b" : theme.borderHex)}
                       strokeWidth={isSelected || isCurrentCart ? "3.5" : "2"}
                       filter={isSelected ? "url(#cyanGlow)" : (isCurrentCart ? "url(#goldGlow)" : undefined)}
+                      className="transition-transform duration-150 origin-center group-hover:scale-110"
                     />
 
-                    <g transform="translate(-9, -9)">
+                    <g transform="translate(-9, -9)" className="pointer-events-none transition-transform duration-150 origin-center group-hover:scale-110">
                       <NodeIconSvg type={node.type} color={isSelected ? "#38bdf8" : theme.color} size={18} />
                     </g>
 
