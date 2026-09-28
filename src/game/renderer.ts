@@ -19,6 +19,7 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
       ctx.save();
       ctx.translate(offsetX + shakeX, offsetY + shakeY);
 
+      const floorList: any[] = [];
       const renderList: any[] = [];
       
       const centerC = Math.floor(g.player.x / TILE_SIZE);
@@ -35,13 +36,27 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
           const cx = c * TILE_SIZE + TILE_SIZE/2;
           const cy = r * TILE_SIZE + TILE_SIZE/2;
           if (g.grid[r] && (g.grid[r][c] === 0 || g.grid[r][c] === 2)) {
-            renderList.push({ type: 'floor', x: cx, y: cy, z: cx + cy - TILE_SIZE, isRail: g.grid[r][c] === 2, data: { r, c } }); 
+            floorList.push({ type: 'floor', x: cx, y: cy, z: (c + r), isRail: g.grid[r][c] === 2, data: { r, c } }); 
           } else if (g.grid[r] && g.grid[r][c] === 1) {
             renderList.push({ type: 'wall', x: cx, y: cy, z: cx + cy, data: { r, c } });
           }
         }
       }
+
+      // Sort and render entire flat floor plane first (Pass 1: Seamless Floor Sheet)
+      floorList.sort((a, b) => a.z - b.z);
+      floorList.forEach(item => {
+        renderFloorTile(ctx, {
+          cx: item.x,
+          cy: item.y,
+          r: item.data?.r ?? Math.floor(item.y / TILE_SIZE),
+          c: item.data?.c ?? Math.floor(item.x / TILE_SIZE),
+          isRail: item.isRail,
+          grid: g.grid
+        });
+      });
       
+      // Pass 2: Monolithic Walls and Entities sorted by depth (Painter's Algorithm)
       renderList.push({ type: 'cart', x: g.cart.x, y: g.cart.y, z: g.cart.x + g.cart.y });
       renderList.push({ type: 'player', x: g.player.x, y: g.player.y, z: g.player.x + g.player.y, data: g.player });
       g.nodes.forEach(n => renderList.push({ type: 'node', x: n.x, y: n.y, z: n.x + n.y, data: n }));
@@ -476,16 +491,6 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
 
       renderList.forEach(item => {
         switch(item.type) {
-          case 'floor': 
-             renderFloorTile(ctx, {
-               cx: item.x,
-               cy: item.y,
-               r: item.data?.r ?? Math.floor(item.y / TILE_SIZE),
-               c: item.data?.c ?? Math.floor(item.x / TILE_SIZE),
-               isRail: item.isRail,
-               grid: g.grid
-             });
-             break;
           case 'wall': {
              const pIso = project(g.player.x, g.player.y);
              const wIso = project(item.x, item.y);

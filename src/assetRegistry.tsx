@@ -4,6 +4,10 @@
  */
 
 import React from 'react';
+import wallSpriteUrl from './assets/images/wall.png';
+import floorSpriteUrl from './assets/images/floor.png';
+
+export { wallSpriteUrl, floorSpriteUrl };
 
 // ==========================================
 // 1. ASSET TYPE DEFINITIONS
@@ -581,6 +585,25 @@ export const ASSET_REGISTRY: Record<string, EntityAsset> = {
     scale: 1.0,
     render: renderHeroMinerCanvas,
     shadow: { radiusX: 16, radiusY: 8, opacity: 0.55 },
+  },
+
+  // --- ENVIRONMENT TILES ---
+  wall: {
+    id: 'wall',
+    name: 'Стена Шахты',
+    category: 'prop',
+    type: 'image',
+    src: wallSpriteUrl,
+    scale: 1.0,
+  },
+
+  floor: {
+    id: 'floor',
+    name: 'Пол Шахты',
+    category: 'prop',
+    type: 'image',
+    src: floorSpriteUrl,
+    scale: 1.0,
   },
 
   // --- MINING NODES ---
