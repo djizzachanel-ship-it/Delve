@@ -31,7 +31,7 @@ const CELL_SIZE_Y = 140;
 const ORIGIN_X = 1600;
 const ORIGIN_Y = 160;
 
-// Хеш-функция для создания стабильных органических смещений узлов
+// Хеш-функция для стабильного смещения узлов
 const getNodeJitter = (gx: number, gy: number) => {
   if (gx === 0 && gy === 0) return { offsetX: 0, offsetY: 0 };
   const hashX = Math.sin(gx * 12.9898 + gy * 78.233) * 43758.5453;
@@ -116,17 +116,17 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const selectedNode: DelveNode = grid.nodes[selectedNodeId] || grid.nodes[grid.currentCartNodeId] || grid.nodes[getDelveNodeId(0, 0)];
-  const currentCartNode: DelveNode = grid.nodes[grid.currentCartNodeId] || grid.nodes[getDelveNodeId(0, 0)];
+  const currentCartNode: DelveNode = grid.nodes[grid.currentCartNodeId] || grid.nodes[getDelveNodeId(0, 0)] || Object.values(grid.nodes)[0];
+  const selectedNode: DelveNode = grid.nodes[selectedNodeId] || currentCartNode;
 
   useEffect(() => {
     if (onUpdateGrid) onUpdateGrid(grid);
   }, [grid, onUpdateGrid]);
 
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && currentCartNode) {
       const { clientWidth, clientHeight } = containerRef.current;
-      const cartPos = getNodePos(currentCartNode?.gridX ?? 0, currentCartNode?.gridY ?? 0);
+      const cartPos = getNodePos(currentCartNode.gridX, currentCartNode.gridY);
       setPan({
         x: clientWidth / 2 - cartPos.x * zoom,
         y: clientHeight / 2 - cartPos.y * zoom
@@ -135,9 +135,9 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
   }, []);
 
   const handleCenterOnCart = useCallback(() => {
-    if (containerRef.current) {
+    if (containerRef.current && currentCartNode) {
       const { clientWidth, clientHeight } = containerRef.current;
-      const cartPos = getNodePos(currentCartNode?.gridX ?? 0, currentCartNode?.gridY ?? 0);
+      const cartPos = getNodePos(currentCartNode.gridX, currentCartNode.gridY);
       setPan({
         x: clientWidth / 2 - cartPos.x * zoom,
         y: clientHeight / 2 - cartPos.y * zoom
@@ -216,8 +216,15 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
 
   const cartPos = getNodePos(currentCartNode.gridX, currentCartNode.gridY);
   const targetPos = getNodePos(selectedNode.gridX, selectedNode.gridY);
-  const angleToTarget = Math.atan2(targetPos.y - cartPos.y, targetPos.x - cartPos.x) * (180 / Math.PI);
-  const canStartExpedition = selectedNode.state === 'reachable' && !selectedNode.visited;
+  
+  const dx = targetPos.x - cartPos.x;
+  const dy = targetPos.y - cartPos.y;
+  const distanceToTarget = Math.sqrt(dx * dx + dy * dy) || 1;
+  const beamAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+  const beamSpread = Math.min(70, Math.max(25, distanceToTarget * 0.22));
+
+  const isConnected = currentCartNode.connectedNodes.includes(selectedNode.id);
+  const canStartExpedition = !selectedNode.visited && (selectedNode.state === 'reachable' || isConnected) && selectedNode.id !== currentCartNode.id;
   const currentTheme = DELVE_NODE_THEMES[selectedNode.type] || DELVE_NODE_THEMES.ore;
 
   return (
@@ -284,13 +291,13 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
               <stop offset="100%" stopColor="#030712" stopOpacity="0" />
             </radialGradient>
             <radialGradient id="crawlerHeadlight" cx="0%" cy="50%" r="100%">
-              <stop offset="0%" stopColor="#fef08a" stopOpacity="0.5" />
+              <stop offset="0%" stopColor="#fef08a" stopOpacity="0.45" />
               <stop offset="100%" stopColor="#030712" stopOpacity="0" />
             </radialGradient>
           </defs>
 
           <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-            {/* Тоннели (Curves) */}
+            {/* Тоннели */}
             <g className="delve-paths">
               {grid.paths.map(path => {
                 const n1 = grid.nodes[path.fromId];
@@ -328,14 +335,21 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
               })}
             </g>
 
-            {/* Освещение прожектора */}
-            {state.cartModules?.searchlight && (
-              <g transform={`translate(${cartPos.x}, ${cartPos.y}) rotate(${angleToTarget})`} className="pointer-events-none opacity-80">
-                <polygon points="0,0 280,-70 280,70" fill="url(#crawlerHeadlight)" />
+            {/* Освещение прожектора (Изолированное, с pointer-events: none) */}
+            {state.cartModules?.searchlight && selectedNode.id !== currentCartNode.id && (
+              <g 
+                transform={`translate(${cartPos.x}, ${cartPos.y}) rotate(${beamAngle})`} 
+                className="pointer-events-none opacity-80"
+              >
+                <polygon 
+                  points={`0,0 ${distanceToTarget},-${beamSpread} ${distanceToTarget},${beamSpread}`} 
+                  fill="url(#crawlerHeadlight)" 
+                  className="pointer-events-none"
+                />
               </g>
             )}
 
-            {/* Узлы (Nodes) - Без дёргания hover */}
+            {/* Узлы (Nodes) */}
             <g className="delve-nodes">
               {(Object.values(grid.nodes) as DelveNode[]).map(node => {
                 const pos = getNodePos(node.gridX, node.gridY);
@@ -360,14 +374,14 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                       stroke={isSelected ? "#38bdf8" : (isCurrentCart ? "#f59e0b" : theme.borderHex)}
                       strokeWidth={isSelected || isCurrentCart ? "3.5" : "2"}
                       filter={isSelected ? "url(#cyanGlow)" : (isCurrentCart ? "url(#goldGlow)" : undefined)}
-                      className="transition-transform duration-150 origin-center group-hover:scale-110"
+                      className="transition-transform duration-150 origin-center group-hover:scale-110 pointer-events-auto"
                     />
 
                     <g transform="translate(-9, -9)" className="pointer-events-none transition-transform duration-150 origin-center group-hover:scale-110">
                       <NodeIconSvg type={node.type} color={isSelected ? "#38bdf8" : theme.color} size={18} />
                     </g>
 
-                    <text y="34" textAnchor="middle" fill="#cbd5e1" fontSize="10" fontWeight="bold" className="font-mono pointer-events-none">
+                    <text y="34" textAnchor="middle" fill="#cbd5e1" fontSize="10" fontWeight="bold" className="font-mono pointer-events-none select-none">
                       {theme.badge}
                     </text>
                   </g>
@@ -406,7 +420,7 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
           disabled={!canStartExpedition}
           className={`w-full md:w-auto px-6 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 transition ${
             canStartExpedition
-              ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 active:scale-95'
+              ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 active:scale-95 shadow-lg shadow-amber-500/20 cursor-pointer'
               : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60'
           }`}
         >
