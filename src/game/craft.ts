@@ -101,11 +101,39 @@ export const craftItem = (
   else rarity = 'common';
 
   // 3. Generate Base Item
-  // Use depth to pick a base item from BASE_ITEMS, not exceeding the number of available base items
-  const basePool = BASE_ITEMS[slot];
-  const baseTemplate = basePool[Math.min(basePool.length - 1, Math.floor(itemTier / 20))];
+  const basePool = BASE_ITEMS[slot] || [];
+  const baseIndex = Math.min(basePool.length - 1, Math.floor((itemTier - 1) / 20));
+  const baseTemplate = basePool[baseIndex] || { name: 'Предмет', baseHp: 10, baseDmg: 5, baseArm: 2 };
   
-  // New Item Structure
+  // 4. Determine Affix Count based on Rarity
+  let prefixCount = 0;
+  let suffixCount = 0;
+  if (rarity === 'magic') { prefixCount = 1; suffixCount = 0; }
+  else if (rarity === 'rare') { prefixCount = 1; suffixCount = 1; }
+  else if (rarity === 'epic') { prefixCount = 2; suffixCount = 1; }
+  else if (rarity === 'legendary') { prefixCount = 2; suffixCount = 2; }
+
+  // 5. Generate Random Affixes (RNG)
+  const prefixes = [];
+  const suffixes = [];
+
+  for (let i = 0; i < prefixCount && PREFIX_TEMPLATES.length > 0; i++) {
+    const randomPrefix = PREFIX_TEMPLATES[Math.floor(Math.random() * PREFIX_TEMPLATES.length)];
+    prefixes.push({
+      ...randomPrefix,
+      tier: Math.max(1, Math.floor(itemTier / 10))
+    });
+  }
+
+  for (let i = 0; i < suffixCount && SUFFIX_TEMPLATES.length > 0; i++) {
+    const randomSuffix = SUFFIX_TEMPLATES[Math.floor(Math.random() * SUFFIX_TEMPLATES.length)];
+    suffixes.push({
+      ...randomSuffix,
+      tier: Math.max(1, Math.floor(itemTier / 10))
+    });
+  }
+
+  // 6. Build Final Item
   const item: Item = {
     id: Math.random().toString(36).substring(7),
     name: baseTemplate.name,
@@ -117,41 +145,29 @@ export const craftItem = (
       damage: baseTemplate.baseDmg,
       armor: baseTemplate.baseArm,
     },
-    prefixes: [],
-    suffixes: []
+    prefixes,
+    suffixes
   };
-
-  // 4. Generate Affixes (Number depends on Rarity)
-  // Logic to populate prefixes/suffixes randomly based on Rarity would go here
-  // (Simplified for brevity, following the requirement for randomly picking based on rarity)
 
   return item;
 };
 
-
 export function getEstimatedStats(slot: ItemSlot, tierIndex: number) {
-  const pool = BASE_ITEMS[slot];
-  const item = pool[Math.min(pool.length - 1, Math.max(0, tierIndex))];
-  const scale = 1 + tierIndex * 0.15;
+  const pool = BASE_ITEMS[slot] || [];
+  const item = pool[Math.min(pool.length - 1, Math.max(0, tierIndex))] || { name: 'Предмет', baseHp: 10, baseDmg: 5, baseArm: 2 };
+  
   return {
     name: item.name,
-    minHp: Math.round(item.baseHp * scale),
-    maxHp: Math.round(item.baseHp * scale * 1.45),
-    minDmg: Math.round(item.baseDmg * scale),
-    maxDmg: Math.round(item.baseDmg * scale * 1.45),
-    minArm: Math.round(item.baseArm * scale),
-    maxArm: Math.round(item.baseArm * scale * 1.45)
+    minHp: item.baseHp,
+    maxHp: Math.round(item.baseHp * 1.2),
+    minDmg: item.baseDmg,
+    maxDmg: Math.round(item.baseDmg * 1.2),
+    minArm: item.baseArm,
+    maxArm: Math.round(item.baseArm * 1.2)
   };
 }
 
 // Reforging an existing item rerolls its affixes with fresh rolls
 export function reforgeItemAffixes(item: Item): Item {
-  const newItem = generateRPGItem(item.slot, item.level || 0, item.rarity);
-  return {
-    ...item,
-    stats: newItem.stats,
-    prefix: newItem.prefix,
-    suffix: newItem.suffix,
-    name: newItem.name
-  };
+  return craftItem(item.slot, item.tier || 1);
 }
