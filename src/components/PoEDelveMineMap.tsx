@@ -5,7 +5,7 @@ import {
   Crown, Eye, Crosshair, Magnet, Check, ChevronRight, 
   Home, RefreshCw, AlertTriangle, Zap, Radio, Layers,
   Compass, ZoomIn, ZoomOut, ArrowRight, ArrowDown, HelpCircle,
-  LocateFixed, Lock, Volume2, Navigation
+  LocateFixed, Lock, Volume2, Navigation, X
 } from 'lucide-react';
 import { 
   DelveGridGraph, 
@@ -36,6 +36,29 @@ const CELL_SIZE_Y = 130;
 // Base origin offsets
 const ORIGIN_X = 1600;
 const ORIGIN_Y = 160;
+
+// Helper component for SVG icons inside nodes
+const NodeIconSvg: React.FC<{ type: DelveNodeType; color: string; opacity?: number; size?: number }> = ({ 
+  type, 
+  color, 
+  opacity = 1, 
+  size = 18 
+}) => {
+  switch (type) {
+    case 'ore':
+      return <Pickaxe size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+    case 'azurite':
+      return <Gem size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+    case 'currency':
+      return <Sparkles size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+    case 'items':
+      return <Shield size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+    case 'boss':
+      return <Crown size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+    default:
+      return <Pickaxe size={size} color={color} strokeWidth={2.2} style={{ opacity }} />;
+  }
+};
 
 export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
   state,
@@ -158,7 +181,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
 
   // Mouse / Touch Drag & Pan Handlers
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Only drag with primary mouse button or touch
     if (e.button !== 0) return;
     isDraggingRef.current = true;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
@@ -206,7 +228,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
   const angleToTarget = Math.atan2(targetPos.y - cartPos.y, targetPos.x - cartPos.x) * (180 / Math.PI);
 
   const canStartExpedition = selectedNode.state === 'reachable' && !selectedNode.visited;
-
   const currentTheme = DELVE_NODE_THEMES[selectedNode.type] || DELVE_NODE_THEMES.ore;
 
   return (
@@ -390,7 +411,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                 const n1 = grid.nodes[path.fromId];
                 const n2 = grid.nodes[path.toId];
                 if (!n1 || !n2) return null;
-                // If both are hidden in fog of war, skip drawing
                 if (n1.state === 'hidden' && n2.state === 'hidden') return null;
 
                 const p1 = getNodePos(n1.gridX, n1.gridY);
@@ -398,7 +418,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
 
                 return (
                   <g key={`bg_${path.id}`}>
-                    {/* Tunnel rock excavated corridor */}
                     <line
                       x1={p1.x}
                       y1={p1.y}
@@ -408,7 +427,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                       strokeWidth="24"
                       strokeLinecap="round"
                     />
-                    {/* Railway ties (Sleepers) */}
                     <line
                       x1={p1.x}
                       y1={p1.y}
@@ -438,7 +456,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                 if (isCleared) {
                   return (
                     <g key={`cleared_${path.id}`}>
-                      {/* Outer golden ambient glow */}
                       <line
                         x1={p1.x}
                         y1={p1.y}
@@ -450,7 +467,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                         strokeLinecap="round"
                         filter="url(#goldGlow)"
                       />
-                      {/* Inner bright yellow railway steel */}
                       <line
                         x1={p1.x}
                         y1={p1.y}
@@ -460,7 +476,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                         strokeWidth="3.5"
                         strokeLinecap="round"
                       />
-                      {/* High-voltage center line */}
                       <line
                         x1={p1.x}
                         y1={p1.y}
@@ -473,7 +488,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                     </g>
                   );
                 } else if (isReachableTunnel) {
-                  // Connects cleared hub to an upcoming reachable node
                   return (
                     <g key={`reachable_${path.id}`}>
                       <line
@@ -490,7 +504,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                     </g>
                   );
                 } else if (n1.state !== 'hidden' || n2.state !== 'hidden') {
-                  // Dim unvisited tunnel
                   return (
                     <line
                       key={`dim_${path.id}`}
@@ -507,7 +520,7 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
               })}
             </g>
 
-            {/* 3. ACTIVE ROUTE HIGHLIGHTING (PLAYER SELECTED EXPEDITION PATH) */}
+            {/* 3. ACTIVE ROUTE HIGHLIGHTING */}
             <g className="delve-active-route">
               {grid.paths.map(path => {
                 const isPart = activeRoutePathKeys.has(path.id);
@@ -521,7 +534,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
 
                 return (
                   <g key={`route_${path.id}`}>
-                    {/* Blazing animated cyan/gold path */}
                     <line
                       x1={p1.x}
                       y1={p1.y}
@@ -557,7 +569,7 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
               })}
             </g>
 
-            {/* 4. LIGHT ILLUMINATION CONE FROM CRAWLER SEARCHLIGHT */}
+            {/* 4. LIGHT ILLUMINATION CONE */}
             {state.cartModules?.searchlight && (
               <g 
                 transform={`translate(${cartPos.x}, ${cartPos.y}) rotate(${angleToTarget})`}
@@ -570,7 +582,7 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
               </g>
             )}
 
-            {/* 5. DELVE NODES (INTERSECTIONS) */}
+            {/* 5. DELVE NODES */}
             <g className="delve-nodes">
               {(Object.values(grid.nodes) as DelveNode[]).map(node => {
                 const pos = getNodePos(node.gridX, node.gridY);
@@ -578,7 +590,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                 const isCurrentCart = currentCartNode.id === node.id;
                 const theme = DELVE_NODE_THEMES[node.type] || DELVE_NODE_THEMES.ore;
 
-                // Hidden nodes in the deep fog of war
                 if (node.state === 'hidden') {
                   return (
                     <g 
@@ -592,7 +603,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                   );
                 }
 
-                // Visible nodes (scouted through mist)
                 if (node.state === 'visible') {
                   return (
                     <g
@@ -601,9 +611,7 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                       onClick={() => handleSelectNode(node)}
                       className="cursor-pointer transition-transform hover:scale-110"
                     >
-                      {/* Fog gloom background */}
                       <circle r="22" fill="#090d16" stroke="#334155" strokeWidth="2" strokeDasharray="4 3" />
-                      {/* Dim thematic icon */}
                       <circle r="16" fill={theme.bgHex} fillOpacity="0.5" stroke={theme.borderHex} strokeWidth="1.5" strokeOpacity="0.5" />
                       <g transform="translate(-9, -9)">
                         <NodeIconSvg type={node.type} color={theme.color} opacity={0.65} size={18} />
@@ -622,7 +630,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                   );
                 }
 
-                // Cleared / Visited node
                 if (node.visited || node.state === 'cleared') {
                   return (
                     <g
@@ -631,9 +638,7 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                       onClick={() => handleSelectNode(node)}
                       className="cursor-pointer group"
                     >
-                      {/* Radiant cleared aura */}
                       <circle r="36" fill="url(#clearedAura)" />
-                      {/* Outer gold ring */}
                       <circle
                         r="20"
                         fill="#1c1917"
@@ -646,7 +651,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                         <NodeIconSvg type={node.type} color="#fef08a" size={18} />
                       </g>
                       
-                      {/* Cleared checkmark badge if not current cart */}
                       {!isCurrentCart && (
                         <g transform="translate(10, -10)">
                           <circle r="6" fill="#15803d" stroke="#22c55e" strokeWidth="1.5" />
@@ -668,7 +672,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                   );
                 }
 
-                // Reachable Node (Pulsing, Clickable Target for expedition!)
                 if (node.state === 'reachable') {
                   return (
                     <g
@@ -677,7 +680,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                       onClick={() => handleSelectNode(node)}
                       className="cursor-pointer group"
                     >
-                      {/* Pulsing beacon ring */}
                       <circle
                         r="28"
                         fill="none"
@@ -687,7 +689,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                         className="animate-ping"
                       />
 
-                      {/* Selection highlight ring */}
                       {isSelected && (
                         <circle
                           r="26"
@@ -698,7 +699,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                         />
                       )}
 
-                      {/* Main Node Housing */}
                       <circle
                         r="22"
                         fill={theme.bgHex}
@@ -711,7 +711,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                         <NodeIconSvg type={node.type} color={theme.color} size={18} />
                       </g>
 
-                      {/* Depth / Multiplier badge */}
                       <g transform="translate(12, 12)">
                         <rect x="-10" y="-7" width="20" height="14" rx="4" fill="#0f172a" stroke={theme.borderHex} strokeWidth="1" />
                         <text x="0" y="3" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold">
@@ -719,7 +718,6 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                         </text>
                       </g>
 
-                      {/* Label below node */}
                       <text
                         y="36"
                         textAnchor="middle"
@@ -738,15 +736,12 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
               })}
             </g>
 
-            {/* 6. CRAWLER WAGON (CURRENT PLAYER POSITION) */}
+            {/* 6. CRAWLER WAGON */}
             <g 
               transform={`translate(${cartPos.x}, ${cartPos.y})`}
               className="pointer-events-none"
             >
-              {/* Pulsing undercarriage aura */}
               <circle r="28" fill="#f59e0b" fillOpacity="0.2" className="animate-pulse" />
-              
-              {/* Cart body */}
               <rect
                 x="-16"
                 y="-13"
@@ -758,17 +753,11 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                 strokeWidth="2.5"
                 filter="url(#goldGlow)"
               />
-
-              {/* Ore / Battery payload in cart */}
               <rect x="-11" y="-8" width="22" height="16" rx="3" fill="#451a03" stroke="#d97706" strokeWidth="1" />
               <circle cx="-5" cy="0" r="3" fill="#facc15" />
               <circle cx="5" cy="0" r="3" fill="#38bdf8" />
-
-              {/* Cart wheels */}
               <circle cx="-13" cy="13" r="4.5" fill="#0f172a" stroke="#cbd5e1" strokeWidth="1.5" />
               <circle cx="13" cy="13" r="4.5" fill="#0f172a" stroke="#cbd5e1" strokeWidth="1.5" />
-
-              {/* Lantern / Searchlight */}
               <circle cx="0" cy="-14" r="5" fill="#fef08a" stroke="#f59e0b" strokeWidth="1.5" filter="url(#goldGlow)" />
             </g>
 
@@ -791,169 +780,91 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
       </div>
 
       {/* BOTTOM CONTROL DOCK: SELECTED NODE DETAILS & EXPEDITION LAUNCH */}
-      <div className="relative z-30 bg-[#090d16]/95 border-t border-amber-500/30 backdrop-blur-xl px-4 py-3 shadow-2xl">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          
-          {/* Left: Node Info Card */}
-          <div className="flex items-center gap-3.5 w-full md:w-auto">
-            <div 
-              className="w-14 h-14 rounded-2xl flex items-center justify-center border-2 shrink-0 shadow-lg"
-              style={{
-                backgroundColor: currentTheme.bgHex,
-                borderColor: currentTheme.borderHex,
-                boxShadow: `0 0 20px ${currentTheme.glowColor}40`
-              }}
-            >
-              <NodeIconSvg type={selectedNode.type} color={currentTheme.color} size={28} />
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span 
-                  className="text-[10px] font-black uppercase px-2 py-0.5 rounded border"
-                  style={{
-                    backgroundColor: `${currentTheme.borderHex}25`,
-                    borderColor: currentTheme.borderHex,
-                    color: currentTheme.color
-                  }}
-                >
-                  {currentTheme.badge}
-                </span>
-
-                <h3 className="text-sm font-black text-slate-100 truncate">
-                  {selectedNode.name}
-                </h3>
-
-                {selectedNode.visited && (
-                  <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded font-semibold flex items-center gap-1">
-                    <Check className="w-3 h-3" /> Зачищено
-                  </span>
-                )}
-                {selectedNode.state === 'reachable' && !selectedNode.visited && (
-                  <span className="text-[10px] px-1.5 py-0.2 bg-sky-500/20 text-sky-400 border border-sky-500/40 rounded font-bold animate-pulse">
-                    Доступно для спуска
-                  </span>
-                )}
-                {selectedNode.state === 'visible' && (
-                  <span className="text-[10px] px-1.5 py-0.2 bg-slate-700/60 text-slate-300 border border-slate-600 rounded">
-                    Требуется пробить путь
-                  </span>
-                )}
-              </div>
-
-              <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">
-                {selectedNode.description}
-              </p>
-
-              {/* Stats badges */}
-              <div className="flex items-center gap-3 text-[11px] font-mono mt-1 text-slate-300">
-                <span>Горизонт: <b className="text-amber-400">{selectedNode.depth}</b></span>
-                <span>•</span>
-                <span>Награда: <b className="text-emerald-400">+{Math.round((selectedNode.rewardMultiplier - 1) * 100)}%</b></span>
-                <span>•</span>
-                <span>Сложность: <b className="text-rose-400">x{selectedNode.difficultyMultiplier}</b></span>
-                <span>•</span>
-                <span className="capitalize">
-                  Опасность: <b className={
-                    selectedNode.riskRating === 'boss' ? 'text-pink-400' :
-                    selectedNode.riskRating === 'deadly' ? 'text-red-500' :
-                    selectedNode.riskRating === 'high' ? 'text-amber-500' :
-                    selectedNode.riskRating === 'medium' ? 'text-yellow-400' : 'text-emerald-400'
-                  }>{selectedNode.riskRating}</b>
-                </span>
-              </div>
-            </div>
+      <div className="relative z-30 p-4 bg-[#090d16]/95 border-t border-amber-500/20 backdrop-blur-md shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+        {/* Selected Node Details */}
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <div 
+            className="w-12 h-12 rounded-xl flex items-center justify-center border shadow-inner shrink-0"
+            style={{ 
+              backgroundColor: currentTheme.bgHex, 
+              borderColor: currentTheme.borderHex 
+            }}
+          >
+            <NodeIconSvg type={selectedNode.type} color={currentTheme.color} size={26} />
           </div>
 
-          {/* Right: Modules upgrade quickbar & Start Expedition Button */}
-          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-            
-            {/* Quick Modules Toggle/Install */}
-            <div className="hidden lg:flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1 rounded-xl">
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-slate-100">{currentTheme.badge}</span>
+              <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-slate-800 text-amber-400 border border-amber-500/30">
+                x{selectedNode.rewardMultiplier} Награда
+              </span>
+              {selectedNode.visited && (
+                <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/30">
+                  Зачищено
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5 max-w-md">
+              {currentTheme.description || 'Узел подземной шахты. Запустите вагонетку для начала экспедиции.'}
+            </p>
+          </div>
+        </div>
+
+        {/* Modules & Action Button */}
+        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+          {/* Quick Buy Modules Buttons */}
+          <div className="hidden lg:flex items-center gap-1.5 border-r border-slate-800 pr-3 mr-1">
+            {!state.cartModules?.searchlight && (
               <button
                 onClick={() => onBuyModule('searchlight')}
-                disabled={state.cartModules?.searchlight || !canAffordModule('searchlight')}
-                className={`px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 border transition ${
-                  state.cartModules?.searchlight
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                    : canAffordModule('searchlight')
-                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                    : 'bg-slate-950 text-slate-600 border-transparent opacity-60'
-                }`}
-                title="Прожектор: Освещает путь и врагов"
+                disabled={!canAffordModule('searchlight')}
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-semibold text-slate-300 rounded border border-slate-700 flex items-center gap-1"
+                title="Купить Прожектор"
               >
-                <Eye className="w-3 h-3 text-amber-400" />
-                <span>Прожектор</span>
-                {state.cartModules?.searchlight && <Check className="w-3 h-3 text-emerald-400" />}
-              </button>
-
-              <button
-                onClick={() => onBuyModule('turret')}
-                disabled={state.cartModules?.turret || !canAffordModule('turret')}
-                className={`px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 border transition ${
-                  state.cartModules?.turret
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                    : canAffordModule('turret')
-                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                    : 'bg-slate-950 text-slate-600 border-transparent opacity-60'
-                }`}
-                title="Турель: Автоматически обстреливает чудовищ"
-              >
-                <Crosshair className="w-3 h-3 text-emerald-400" />
-                <span>Турель</span>
-                {state.cartModules?.turret && <Check className="w-3 h-3 text-emerald-400" />}
-              </button>
-
-              <button
-                onClick={() => onBuyModule('magnet')}
-                disabled={state.cartModules?.magnet || !canAffordModule('magnet')}
-                className={`px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 border transition ${
-                  state.cartModules?.magnet
-                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                    : canAffordModule('magnet')
-                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                    : 'bg-slate-950 text-slate-600 border-transparent opacity-60'
-                }`}
-                title="Магнит: Притягивает руду и трофеи"
-              >
-                <Magnet className="w-3 h-3 text-cyan-400" />
-                <span>Магнит</span>
-                {state.cartModules?.magnet && <Check className="w-3 h-3 text-emerald-400" />}
-              </button>
-            </div>
-
-            {/* Launch Expedition Button */}
-            {canStartExpedition ? (
-              <button
-                onClick={() => {
-                  sound.playClick();
-                  onSelectNodeAndStart(selectedNode);
-                }}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-black text-sm uppercase tracking-wider rounded-xl shadow-lg shadow-amber-500/25 transition active:scale-95 shrink-0"
-              >
-                <span>Пустить вагонетку в забой</span>
-                <ChevronRight className="w-5 h-5 animate-pulse" />
-              </button>
-            ) : selectedNode.visited ? (
-              <button
-                disabled
-                className="flex items-center gap-2 px-5 py-3 bg-slate-800/80 text-slate-400 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-700/60 cursor-not-allowed shrink-0"
-              >
-                <Check className="w-4 h-4 text-emerald-400" />
-                <span>Узел уже пройден</span>
-              </button>
-            ) : (
-              <button
-                disabled
-                className="flex items-center gap-2 px-5 py-3 bg-slate-800/80 text-slate-400 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-700/60 cursor-not-allowed shrink-0"
-              >
-                <Lock className="w-4 h-4 text-slate-500" />
-                <span>Сначала откройте путь</span>
+                <span>💡 Прожектор</span>
               </button>
             )}
-
+            {!state.cartModules?.turret && (
+              <button
+                onClick={() => onBuyModule('turret')}
+                disabled={!canAffordModule('turret')}
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-semibold text-slate-300 rounded border border-slate-700 flex items-center gap-1"
+                title="Купить Турель"
+              >
+                <span>🎯 Турель</span>
+              </button>
+            )}
+            {!state.cartModules?.magnet && (
+              <button
+                onClick={() => onBuyModule('magnet')}
+                disabled={!canAffordModule('magnet')}
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-semibold text-slate-300 rounded border border-slate-700 flex items-center gap-1"
+                title="Купить Магнит"
+              >
+                <span>🧲 Магнит</span>
+              </button>
+            )}
           </div>
 
+          {/* Start Expedition Launch Button */}
+          <button
+            onClick={() => {
+              if (canStartExpedition) {
+                sound.playClick();
+                onSelectNodeAndStart(selectedNode);
+              }
+            }}
+            disabled={!canStartExpedition}
+            className={`w-full md:w-auto px-6 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider flex items-center justify-center gap-2 transition shadow-lg ${
+              canStartExpedition
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-amber-500/20 active:scale-95'
+                : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60'
+            }`}
+          >
+            <span>В путь на вагонетке</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -964,152 +875,65 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowLegend(false)}
           >
             <motion.div
-              initial={{ scale: 0.92, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.92, y: 15 }}
-              className="bg-[#0f172a] border border-amber-500/40 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-lg w-full shadow-2xl text-slate-200 relative"
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between border-b border-slate-700/60 pb-3">
-                <h3 className="text-base font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
-                  <Compass className="w-5 h-5" />
-                  <span>Правила Спуска (PoE Delve)</span>
-                </h3>
-                <button
-                  onClick={() => setShowLegend(false)}
-                  className="text-slate-400 hover:text-slate-100 text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
+              <button
+                onClick={() => setShowLegend(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-100 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
 
-              <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
-                <p>
-                  <b>1. Сетка недр:</b> Шахта простирается бесконечно вниз (глубина) и в стороны (влево/вправо). Вы сами выбираете, идти ли глубже за высокими наградами или копать вширь.
-                </p>
-                <p>
-                  <b>2. Вагонетка и Рельсы:</b> Жёлтые освещённые линии — это уже проложенные рельсы. Вагонетка может двигаться только в соседние соединённые узлы.
-                </p>
-                <p>
-                  <b>3. Туман Войны:</b> По мере продвижения вагонетка разгоняет тьму, открывая новые горизонты и скрытые тайники впереди.
-                </p>
+              <h3 className="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2">
+                <HelpCircle className="w-5 h-5" />
+                <span>Справка по Шахте Недр (Delve Map)</span>
+              </h3>
 
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/60">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-amber-400" />
-                    <span><b>Руда:</b> Выход меди и руды</span>
+              <div className="space-y-3 text-xs text-slate-300">
+                <p>
+                  <b>Сетка Недр:</b> Бесконечная подземная карта. Чем глубже вы спускаетесь по вертикали (Горизонт), тем опаснее становятся враги и тем ценнее награды.
+                </p>
+                <div className="grid grid-cols-2 gap-2 my-2">
+                  <div className="flex items-center gap-2 p-2 bg-slate-800/60 rounded-lg border border-slate-700/50">
+                    <Pickaxe className="w-4 h-4 text-amber-400" />
+                    <span><b>Руда:</b> Ресурсы</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-slate-300" />
-                    <span><b>Металл:</b> Сталь и титан</span>
+                  <div className="flex items-center gap-2 p-2 bg-slate-800/60 rounded-lg border border-slate-700/50">
+                    <Gem className="w-4 h-4 text-cyan-400" />
+                    <span><b>Азурит:</b> Апгрейды</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-sky-400" />
-                    <span><b>Осколки:</b> Редкие кристаллы</span>
+                  <div className="flex items-center gap-2 p-2 bg-slate-800/60 rounded-lg border border-slate-700/50">
+                    <Sparkles className="w-4 h-4 text-yellow-300" />
+                    <span><b>Валюта:</b> Сокровища</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-yellow-500" />
-                    <span><b>Тайник:</b> Сундуки с лутом</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-red-500" />
-                    <span><b>Логово:</b> Опасные твари</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-pink-500" />
-                    <span><b>Босс:</b> Реликтовый ужас</span>
+                  <div className="flex items-center gap-2 p-2 bg-slate-800/60 rounded-lg border border-slate-700/50">
+                    <Crown className="w-4 h-4 text-rose-500" />
+                    <span><b>Босс:</b> Элитный узел</span>
                   </div>
                 </div>
+                <p>
+                  <b>Пути вагонетки:</b> Синий пунктир обозначает выбранный маршрут экспедиции. Золотые линии — уже зачищенные и освещенные тоннели.
+                </p>
               </div>
 
               <button
                 onClick={() => setShowLegend(false)}
-                className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg text-xs uppercase"
+                className="w-full mt-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs border border-slate-600 transition"
               >
-                Понятно, в шахту!
+                Понятно
               </button>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
     </div>
   );
 };
-
-// SVG Icon renderer matching Delve node types
-function NodeIconSvg({ type, color, opacity = 1, size = 18 }: { type: DelveNodeType; color: string; opacity?: number; size?: number }) {
-  return (
-    <svg 
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke={color} 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-      opacity={opacity}
-      className="block shrink-0"
-    >
-      {type === 'entrance' && (
-        <>
-          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
-        </>
-      )}
-      {type === 'ore' && (
-        <>
-          <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
-          <circle cx="12" cy="13" r="3" fill={color} fillOpacity="0.4"/>
-        </>
-      )}
-      {type === 'metal' && (
-        <>
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          <path d="M12 8v8"/>
-          <path d="M8 12h8"/>
-        </>
-      )}
-      {type === 'shards' && (
-        <polygon points="6 2 18 2 22 8 12 22 2 8 6 2"/>
-      )}
-      {type === 'treasure' && (
-        <>
-          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-        </>
-      )}
-      {type === 'monster_nest' && (
-        <>
-          <circle cx="9" cy="12" r="1"/>
-          <circle cx="15" cy="12" r="1"/>
-          <path d="M8 20v2h8v-2"/>
-          <path d="m12.5 17-.5-1-.5 1h1z"/>
-          <path d="M16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20"/>
-        </>
-      )}
-      {type === 'secret_cache' && (
-        <>
-          <path d="M12 2v4"/>
-          <path d="m4.93 4.93 2.83 2.83"/>
-          <path d="M2 12h4"/>
-          <path d="m4.93 19.07 2.83-2.83"/>
-          <path d="M12 22v-4"/>
-          <path d="m19.07 19.07-2.83-2.83"/>
-          <path d="M22 12h-4"/>
-          <path d="m19.07 4.93-2.83 2.83"/>
-        </>
-      )}
-      {type === 'boss' && (
-        <>
-          <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14v2H5z"/>
-        </>
-      )}
-    </svg>
-  );
-}
