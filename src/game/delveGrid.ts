@@ -1,6 +1,6 @@
 /**
  * PoE Subterranean Chart (Delve) Infinite Grid Generator
- * Procedural orthogonal 2D grid matrix with fog-of-war and rail conduits.
+ * Procedural organic 2D grid matrix with fog-of-war and rail conduits.
  */
 
 export type DelveNodeType = 
@@ -157,13 +157,9 @@ export const DELVE_NODE_THEMES: Record<DelveNodeType, {
 
 export const getDelveNodeId = (gx: number, gy: number) => `delve_${gx}_${gy}`;
 
-/**
- * Procedurally creates deterministic node data for coordinate (gx, gy)
- */
 export function createDelveNodeAt(gx: number, gy: number): DelveNode {
   const id = getDelveNodeId(gx, gy);
 
-  // Entrance node at (0, 0)
   if (gx === 0 && gy === 0) {
     return {
       id,
@@ -182,18 +178,14 @@ export function createDelveNodeAt(gx: number, gy: number): DelveNode {
     };
   }
 
-  // Boss chambers spawn on depth intervals (every 5 levels) near central lanes
   const isBossChamber = gy > 0 && gy % 5 === 0 && Math.abs(gx) <= 1;
 
   let type: DelveNodeType = 'ore';
   if (isBossChamber) {
     type = 'boss';
   } else {
-    // Deterministic pseudo-random seed based on coordinate hash
     const seed = Math.abs(Math.sin(gx * 12.9898 + gy * 78.233) * 43758.5453) % 1;
 
-    // West lanes (gx < 0) are richer in heavy metals and secret vaults
-    // East lanes (gx > 0) are richer in abyssal crystal shards and monster dens
     if (gx <= -2 && seed < 0.38) {
       type = 'metal';
     } else if (gx >= 2 && seed < 0.38) {
@@ -240,28 +232,32 @@ export function createDelveNodeAt(gx: number, gy: number): DelveNode {
 }
 
 /**
- * Deterministically checks if an orthogonal tunnel connection exists between two adjacent cells.
- * Guarantees full connectivity downward and laterally so the graph has no impassable dead ends.
+ * Органик-генератор связей: предотвращает замкнутые квадраты и добавляет ветвление.
  */
-function hasOrthogonalTunnel(gx1: number, gy1: number, gx2: number, gy2: number): boolean {
-  // All vertical connections exist to guarantee downward and upward passage
+function shouldConnectNodes(gx1: number, gy1: number, gx2: number, gy2: number): boolean {
+  // Прямые вертикальные спускные туннели
   if (gx1 === gx2 && Math.abs(gy1 - gy2) === 1) {
-    return true;
+    const hash = Math.abs(Math.sin(gx1 * 41.53 + Math.min(gy1, gy2) * 83.17) * 98765.43) % 1;
+    return hash > 0.15; // 85% вертикалей открыты
   }
-  // Lateral connections: deterministic check with high connectivity (~85%)
-  if (gy1 === gy2 && Math.abs(gx1 - gy2) !== 0) {
+
+  // Горизонтальные туннели
+  if (gy1 === gy2 && Math.abs(gx1 - gx2) === 1) {
     const minX = Math.min(gx1, gx2);
     const hash = Math.abs(Math.sin(minX * 37.17 + gy1 * 91.53) * 12345.67) % 1;
-    // 85% of lateral connections are open tunnels
-    return hash > 0.15;
+    // Разрываем 55% горизонтов, чтобы убрать четкую «решетку»
+    return hash > 0.55; 
   }
-  return true;
+
+  // Органические диагональные переходы для извилистости
+  if (Math.abs(gx1 - gx2) === 1 && Math.abs(gy1 - gy2) === 1) {
+    const hash = Math.abs(Math.sin(Math.min(gx1, gx2) * 19.31 + Math.min(gy1, gy2) * 71.19) * 54321.09) % 1;
+    return hash < 0.22; // 22% диагоналей образуют интересные срезки
+  }
+
+  return false;
 }
 
-/**
- * Infinite Delve Grid Matrix Generator (PoE Style).
- * Overloaded to support both `generateDelveGrid(x, y)` and `generateDelveGrid(existingGraph, x, y, radiusX, radiusY)`.
- */
 export function generateDelveGrid(
   arg1?: DelveGridGraph | number,
   arg2?: number,
@@ -291,7 +287,6 @@ export function generateDelveGrid(
   const nodes: Record<string, DelveNode> = existingGraph ? { ...existingGraph.nodes } : {};
   const currentCartId = existingGraph?.currentCartNodeId || getDelveNodeId(0, 0);
 
-  // Guarantee entrance (0, 0)
   if (!nodes[getDelveNodeId(0, 0)]) {
     nodes[getDelveNodeId(0, 0)] = createDelveNodeAt(0, 0);
   }
@@ -301,7 +296,6 @@ export function generateDelveGrid(
   const minGX = centerGX - radiusX - 1;
   const maxGX = centerGX + radiusX + 1;
 
-  // 1. Generate grid nodes in region
   for (let gy = minGY; gy <= maxGY; gy++) {
     for (let gx = minGX; gx <= maxGX; gx++) {
       const id = getDelveNodeId(gx, gy);
@@ -311,7 +305,6 @@ export function generateDelveGrid(
     }
   }
 
-  // 2. Build strictly orthogonal grid paths between adjacent nodes
   const pathSet = new Map<string, DelvePath>();
   const addPath = (n1: DelveNode, n2: DelveNode) => {
     const key = [n1.id, n2.id].sort().join('<->');
@@ -336,16 +329,20 @@ export function generateDelveGrid(
   Object.values(nodes).forEach(node => {
     const rightId = getDelveNodeId(node.gridX + 1, node.gridY);
     const downId = getDelveNodeId(node.gridX, node.gridY + 1);
+    const diagRightId = getDelveNodeId(node.gridX + 1, node.gridY + 1);
 
-    if (nodes[rightId] && hasOrthogonalTunnel(node.gridX, node.gridY, node.gridX + 1, node.gridY)) {
+    if (nodes[rightId] && shouldConnectNodes(node.gridX, node.gridY, node.gridX + 1, node.gridY)) {
       addPath(node, nodes[rightId]);
     }
-    if (nodes[downId] && hasOrthogonalTunnel(node.gridX, node.gridY, node.gridX, node.gridY + 1)) {
+    if (nodes[downId] && shouldConnectNodes(node.gridX, node.gridY, node.gridX, node.gridY + 1)) {
       addPath(node, nodes[downId]);
+    }
+    if (nodes[diagRightId] && shouldConnectNodes(node.gridX, node.gridY, node.gridX + 1, node.gridY + 1)) {
+      addPath(node, nodes[diagRightId]);
     }
   });
 
-  // Guarantee that every node has at least one connected neighbor downward or sideways
+  // Гарантируем, что у каждого узла есть хотя бы один путь
   Object.values(nodes).forEach(node => {
     if (node.connectedNodes.length === 0) {
       const downId = getDelveNodeId(node.gridX, node.gridY + 1);
@@ -357,17 +354,11 @@ export function generateDelveGrid(
     }
   });
 
-  // 3. Fog of War & Reachability System
-  // - 'cleared': Node visited by crawler
-  // - 'reachable': Directly connected to a cleared node (available for expedition click!)
-  // - 'visible': Within vision distance of cleared network (scouted through mist)
-  // - 'hidden': Subterranean dark fog
   const clearedNodeIds = new Set<string>();
   Object.values(nodes).forEach(n => {
     if (n.visited) clearedNodeIds.add(n.id);
   });
 
-  // Guarantee current cart node is marked visited
   if (nodes[currentCartId]) {
     nodes[currentCartId].visited = true;
     clearedNodeIds.add(currentCartId);
@@ -379,7 +370,6 @@ export function generateDelveGrid(
       return;
     }
 
-    // Check if connected directly to ANY cleared node
     const isAdjacentToCleared = node.connectedNodes.some(neighborId => clearedNodeIds.has(neighborId));
 
     if (isAdjacentToCleared) {
@@ -387,7 +377,6 @@ export function generateDelveGrid(
       return;
     }
 
-    // Check distance to cleared network
     let isClose = false;
     for (const cId of clearedNodeIds) {
       const c = nodes[cId];
@@ -403,14 +392,12 @@ export function generateDelveGrid(
     node.state = isClose ? 'visible' : 'hidden';
   });
 
-  // Update cleared status on paths
   pathSet.forEach(path => {
     const n1 = nodes[path.fromId];
     const n2 = nodes[path.toId];
     path.cleared = Boolean(n1?.visited && n2?.visited);
   });
 
-  // Compute bounding box
   let minX = 0, maxX = 0, minY = 0, maxY = 3;
   Object.values(nodes).forEach(n => {
     if (n.state !== 'hidden') {
@@ -433,10 +420,6 @@ export function generateDelveGrid(
   };
 }
 
-/**
- * Finds shortest route path between startNodeId and targetNodeId on grid.
- * Returns array of node IDs from start to target.
- */
 export function findDelveRoute(
   graph: DelveGridGraph,
   startId: string,
@@ -464,7 +447,7 @@ export function findDelveRoute(
   }
 
   if (!(targetId in cameFrom)) {
-    return [startId, targetId]; // Fallback direct segment
+    return [startId, targetId];
   }
 
   const path: string[] = [];
@@ -476,12 +459,6 @@ export function findDelveRoute(
   return path;
 }
 
-/**
- * Progresses the Delve Graph upon winning an expedition to targetNodeId:
- * - Marks targetNodeId as visited
- * - Moves current cart to targetNodeId
- * - Expands surrounding grid and lifts fog of war
- */
 export function markDelveNodeCleared(
   graph: DelveGridGraph,
   nodeId: string
@@ -502,7 +479,5 @@ export function markDelveNodeCleared(
     currentCartNodeId: nodeId
   };
 
-  // Expand grid around newly cleared position
   return generateDelveGrid(updatedGraph, node.gridX, node.gridY, 4, 4);
 }
-
