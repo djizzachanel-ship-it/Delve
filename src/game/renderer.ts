@@ -1,6 +1,7 @@
 import { GameEngineState, Enemy, MiningNode, Loot, Slash, FloatingText, Torch } from './types';
 import { project } from './mine';
 import { TILE_SIZE, MAP_COLS, MAP_ROWS } from './config';
+import { renderEntityCanvas } from '../assetRegistry';
 
 export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stats: { maxHealth: number }) => {
   ctx.fillStyle = '#020617';
@@ -802,54 +803,16 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
           ctx.fillStyle = bKind === 'shadow_lord' ? 'rgba(88,28,135,0.6)' : 'rgba(0,0,0,0.6)'; 
           ctx.fill();
 
-          if (bKind === 'foreman') {
-            // Foreman: Heavy red/rusty miner armor with spiked helmet
-            ctx.fillStyle = '#991b1b'; ctx.beginPath(); ctx.moveTo(ix - 11*scale, iy); ctx.lineTo(ix, iy - 27*scale); ctx.lineTo(ix + 11*scale, iy); ctx.fill();
-            ctx.fillStyle = '#7f1d1d'; ctx.beginPath(); ctx.moveTo(ix, iy); ctx.lineTo(ix, iy - 27*scale); ctx.lineTo(ix + 11*scale, iy); ctx.fill();
-            // Horned helmet
-            ctx.fillStyle = '#451a03'; ctx.beginPath(); ctx.arc(ix, iy - 26*scale, 7*scale, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#f59e0b';
-            ctx.beginPath(); ctx.arc(ix - 3*scale, iy - 25*scale, 2*scale, 0, Math.PI * 2); ctx.arc(ix + 3*scale, iy - 25*scale, 2*scale, 0, Math.PI * 2); ctx.fill();
-          } else if (bKind === 'shadow_lord') {
-            // Shadow Lord: Violet ethereal wraith
-            const isChanneling = enemy.telegraphTimer && enemy.telegraphTimer > 0;
-            ctx.fillStyle = isChanneling ? '#2e0854' : '#3b0764'; 
-            ctx.beginPath(); ctx.moveTo(ix - 13*scale, iy); ctx.lineTo(ix, iy - 32*scale); ctx.lineTo(ix + 13*scale, iy); ctx.fill();
-            ctx.fillStyle = '#581c87'; ctx.beginPath(); ctx.moveTo(ix, iy); ctx.lineTo(ix, iy - 32*scale); ctx.lineTo(ix + 13*scale, iy); ctx.fill();
-            // Crown spikes
-            ctx.fillStyle = '#c084fc';
-            ctx.beginPath(); ctx.moveTo(ix - 8*scale, iy - 32*scale); ctx.lineTo(ix, iy - 42*scale); ctx.lineTo(ix + 8*scale, iy - 32*scale); ctx.fill();
-            // Glowing crimson/magenta eyes
-            ctx.fillStyle = '#f43f5e';
-            ctx.beginPath(); ctx.arc(ix - 4*scale, iy - 26*scale, 2*scale, 0, Math.PI * 2); ctx.arc(ix + 4*scale, iy - 26*scale, 2*scale, 0, Math.PI * 2); ctx.fill();
-
-            // Channeling ethereal shadow tendrils
-            if (isChanneling) {
-              ctx.save();
-              ctx.strokeStyle = '#a855f7';
-              ctx.lineWidth = 1.5;
-              const now = Date.now();
-              for (let i = 0; i < 3; i++) {
-                const off = Math.sin(now * 0.01 + i * 2) * 8;
-                ctx.beginPath();
-                ctx.moveTo(ix - 10 + i * 10, iy);
-                ctx.quadraticCurveTo(ix + off, iy - 25, ix, iy - 45);
-                ctx.stroke();
-              }
-              ctx.restore();
-            }
-          } else {
-            // Crystal Colossus: Geometric blue crystal golem
-            ctx.fillStyle = '#0369a1'; ctx.beginPath(); ctx.moveTo(ix - 13*scale, iy); ctx.lineTo(ix, iy - 29*scale); ctx.lineTo(ix + 13*scale, iy); ctx.fill();
-            ctx.fillStyle = '#0284c7'; ctx.beginPath(); ctx.moveTo(ix, iy); ctx.lineTo(ix, iy - 29*scale); ctx.lineTo(ix + 13*scale, iy); ctx.fill();
-            // Cyan back crystal spikes
-            ctx.fillStyle = '#38bdf8';
-            ctx.beginPath(); ctx.moveTo(ix - 10*scale, iy - 15*scale); ctx.lineTo(ix - 18*scale, iy - 28*scale); ctx.lineTo(ix - 4*scale, iy - 24*scale); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(ix + 10*scale, iy - 15*scale); ctx.lineTo(ix + 18*scale, iy - 28*scale); ctx.lineTo(ix + 4*scale, iy - 24*scale); ctx.fill();
-            // Crystal core eye
-            ctx.fillStyle = '#67e8f9';
-            ctx.beginPath(); ctx.arc(ix, iy - 22*scale, 3.5*scale, 0, Math.PI * 2); ctx.fill();
-          }
+          // Boss Entity Rendered via Asset Registry
+          renderEntityCanvas(ctx, bKind, {
+            x: ix,
+            y: iy,
+            scale,
+            time: Date.now(),
+            inLight: enemy.inLight,
+            state: enemy,
+            showShadow: false
+          });
 
           // Preparing strike attack cone indicator (tells player exactly where the boss will slash!)
           if (enemy.preparingStrike && enemy.strikeAngle !== undefined) {
@@ -910,31 +873,17 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
           return;
         }
 
-        // REGULAR MOBS
+        // REGULAR MOBS: Rendered via Entity Render Factory (assetRegistry)
         const kind = enemy.kind || 'corridor_goblin';
-        ctx.beginPath(); ctx.ellipse(ix, iy, 14, 7, 0, 0, Math.PI * 2); 
-        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
-
-        if (kind === 'shadow_stalker') {
-          // Shadow Stalker in the dark
-          ctx.fillStyle = '#2e1065'; ctx.beginPath(); ctx.moveTo(ix - 10, iy); ctx.lineTo(ix, iy - 24); ctx.lineTo(ix + 10, iy); ctx.fill();
-          ctx.fillStyle = '#581c87'; ctx.beginPath(); ctx.moveTo(ix, iy); ctx.lineTo(ix, iy - 24); ctx.lineTo(ix + 10, iy); ctx.fill();
-          // Eyes
-          ctx.fillStyle = enemy.inLight ? '#ec4899' : '#a855f7';
-          ctx.beginPath(); ctx.arc(ix - 3, iy - 14, 2, 0, Math.PI * 2); ctx.arc(ix + 3, iy - 14, 2, 0, Math.PI * 2); ctx.fill();
-        } else if (kind === 'crystal_crawler') {
-          // Crystal Crawler
-          ctx.fillStyle = '#0284c7'; ctx.beginPath(); ctx.moveTo(ix - 12, iy); ctx.lineTo(ix, iy - 19); ctx.lineTo(ix + 12, iy); ctx.fill();
-          ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.moveTo(ix, iy); ctx.lineTo(ix, iy - 19); ctx.lineTo(ix + 12, iy); ctx.fill();
-          ctx.fillStyle = '#e0f2fe'; ctx.beginPath(); ctx.arc(ix, iy - 11, 3, 0, Math.PI*2); ctx.fill();
-        } else {
-          // Corridor Goblin
-          ctx.fillStyle = '#15803d'; ctx.beginPath(); ctx.moveTo(ix - 9, iy); ctx.lineTo(ix, iy - 22); ctx.lineTo(ix + 9, iy); ctx.fill();
-          ctx.fillStyle = '#166534'; ctx.beginPath(); ctx.moveTo(ix, iy); ctx.lineTo(ix, iy - 22); ctx.lineTo(ix + 9, iy); ctx.fill();
-          // Miner lamp
-          ctx.fillStyle = '#ca8a04'; ctx.beginPath(); ctx.arc(ix, iy - 21, 4, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(ix, iy - 21, 2, 0, Math.PI * 2); ctx.fill();
-        }
+        renderEntityCanvas(ctx, kind, {
+          x: ix,
+          y: iy,
+          scale: 1.0,
+          time: Date.now(),
+          inLight: enemy.inLight,
+          state: enemy,
+          showShadow: true
+        });
 
         const hpBarW = 26;
         ctx.fillStyle = '#000'; ctx.fillRect(ix - hpBarW/2, iy - 32, hpBarW, 3);

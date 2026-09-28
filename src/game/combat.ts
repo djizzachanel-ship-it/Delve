@@ -488,10 +488,10 @@ export function updateCombat(
                         sound.playVictory();
                         spawnText(target.x, target.y - 25, '🏆 БОСС ПОВЕРЖЕН!', '#facc15');
 
-                        // Guaranteed high-tier equipment drop (Rare or Epic with powerful affixes)
-                        const possibleSlots: ItemSlot[] = ['weapon', 'head', 'chest'];
+                        // Guaranteed high-tier equipment drop (Rare, Epic, or Legendary with powerful affixes)
+                        const possibleSlots: ItemSlot[] = ['weapon', 'head', 'chest', 'legs', 'boots', 'offhand', 'amulet', 'ring'];
                         const dropSlot = possibleSlots[Math.floor(Math.random() * possibleSlots.length)];
-                        const bossItem = generateRPGItem(dropSlot, depth, Math.random() < 0.45 ? 'epic' : 'rare');
+                        const bossItem = generateRPGItem(dropSlot, depth, Math.random() < 0.2 ? 'legendary' : Math.random() < 0.5 ? 'epic' : 'rare');
                         if (!g.accumulatedItems) g.accumulatedItems = [];
                         g.accumulatedItems.push(bossItem);
                         spawnText(target.x, target.y - 50, `👑 ТРОФЕЙ: ${bossItem.name}`, bossItem.rarity === 'epic' ? '#a855f7' : '#facc15');

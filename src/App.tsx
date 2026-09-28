@@ -7,14 +7,18 @@ import React, { useReducer, useState } from 'react';
 import { gameReducer, initialState } from './store';
 import { MineTab } from './components/MineTab';
 import { TownTab } from './components/TownTab';
-import { CharacterTab } from './components/CharacterTab';
-import { Pickaxe, Home, User, Volume2, VolumeX } from 'lucide-react';
+import { HeroScreen } from './components/HeroScreen';
+import { ThemeStudioModal } from './components/ThemeStudioModal';
+import { Pickaxe, Home, User, Volume2, VolumeX, Palette } from 'lucide-react';
 import { sound } from './game/audio';
+import { useTheme } from './theme';
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [activeTab, setActiveTab] = useState<'town' | 'mine' | 'character'>('town');
   const [isAudioEnabled, setIsAudioEnabled] = useState(sound.enabled);
+  const [isThemeStudioOpen, setIsThemeStudioOpen] = useState(false);
+  const { theme } = useTheme();
   
   const [autoStartTrigger, setAutoStartTrigger] = useState<{
     depth: number;
@@ -36,14 +40,26 @@ export default function App() {
     <div className="flex justify-center bg-black min-h-screen">
       <div className="w-full max-w-md bg-[#0a0f1d] shadow-[0_0_50px_rgba(0,0,0,1)] overflow-hidden flex flex-col relative h-[100dvh]">
         
-        {/* Subtle global audio toggle on top-right */}
-        <button
-          onClick={handleToggleAudio}
-          className="absolute top-3 right-3 z-30 p-2 rounded-full bg-slate-900/70 border border-slate-800/80 text-slate-400 hover:text-white backdrop-blur-md transition-colors"
-          title={isAudioEnabled ? 'Выключить звук' : 'Включить звук'}
-        >
-          {isAudioEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-        </button>
+        {/* Subtle global controls on top-right */}
+        <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
+          {/* Theme & Asset Studio Button */}
+          <button
+            onClick={() => { sound.play('click'); setIsThemeStudioOpen(true); }}
+            className="p-2 rounded-full bg-slate-900/80 border border-amber-500/40 text-amber-300 hover:text-amber-200 hover:bg-slate-800 backdrop-blur-md transition-all shadow-sm cursor-pointer hover:scale-105 active:scale-95"
+            title="Стили оформления & Реестр ассетов"
+          >
+            <Palette size={16} />
+          </button>
+
+          {/* Subtle global audio toggle */}
+          <button
+            onClick={handleToggleAudio}
+            className="p-2 rounded-full bg-slate-900/70 border border-slate-800/80 text-slate-400 hover:text-white backdrop-blur-md transition-colors cursor-pointer hover:scale-105 active:scale-95"
+            title={isAudioEnabled ? 'Выключить звук' : 'Включить звук'}
+          >
+            {isAudioEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </button>
+        </div>
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-hidden relative">
@@ -66,7 +82,7 @@ export default function App() {
           </div>
           
           <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'character' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-            <CharacterTab 
+            <HeroScreen 
               state={state} 
               dispatch={dispatch} 
               onGoToTown={() => setActiveTab('town')} 
@@ -107,6 +123,12 @@ export default function App() {
             )}
           </button>
         </nav>
+
+        {/* Theme & Asset Studio Modal */}
+        <ThemeStudioModal 
+          isOpen={isThemeStudioOpen} 
+          onClose={() => setIsThemeStudioOpen(false)} 
+        />
       </div>
     </div>
   );

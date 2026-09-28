@@ -4,13 +4,6 @@ import { Item, ItemSlot, Rarity, ItemAffix } from '../types';
 // BASE ITEMS BY SLOT & TIER
 // ==========================================
 export const BASE_ITEMS: Record<ItemSlot, { name: string; baseHp: number; baseDmg: number; baseArm: number }[]> = {
-  weapon: [
-    { name: 'Кирка Шахтёра', baseHp: 0, baseDmg: 6, baseArm: 0 },
-    { name: 'Кованый Меч', baseHp: 4, baseDmg: 10, baseArm: 0 },
-    { name: 'Стальной Палаш', baseHp: 8, baseDmg: 15, baseArm: 1 },
-    { name: 'Обсидиановый Клинок', baseHp: 12, baseDmg: 21, baseArm: 1 },
-    { name: 'Рунный Секач Недр', baseHp: 18, baseDmg: 28, baseArm: 2 }
-  ],
   head: [
     { name: 'Кожаный Подшлемник', baseHp: 8, baseDmg: 0, baseArm: 1 },
     { name: 'Шахтёрская Каска', baseHp: 14, baseDmg: 1, baseArm: 2 },
@@ -24,7 +17,104 @@ export const BASE_ITEMS: Record<ItemSlot, { name: string; baseHp: number; baseDm
     { name: 'Пластинчатая Кираса', baseHp: 36, baseDmg: 1, baseArm: 7 },
     { name: 'Латы Горного Титана', baseHp: 52, baseDmg: 2, baseArm: 11 },
     { name: 'Панцирь Тёмных Недр', baseHp: 72, baseDmg: 3, baseArm: 15 }
+  ],
+  legs: [
+    { name: 'Кожаные Поножи', baseHp: 6, baseDmg: 0, baseArm: 1 },
+    { name: 'Клёпаные Бриджи', baseHp: 12, baseDmg: 0, baseArm: 2 },
+    { name: 'Стальные Набедренники', baseHp: 20, baseDmg: 1, baseArm: 4 },
+    { name: 'Поножи Горного Стража', baseHp: 30, baseDmg: 1, baseArm: 6 },
+    { name: 'Мифриловые Поножи', baseHp: 44, baseDmg: 2, baseArm: 9 }
+  ],
+  boots: [
+    { name: 'Шахтёрские Сапоги', baseHp: 4, baseDmg: 0, baseArm: 1 },
+    { name: 'Кованые Ботфорты', baseHp: 8, baseDmg: 0, baseArm: 2 },
+    { name: 'Стальные Сабатоны', baseHp: 14, baseDmg: 1, baseArm: 3 },
+    { name: 'Поступи Недр', baseHp: 22, baseDmg: 1, baseArm: 5 },
+    { name: 'Крылатые Башмаки', baseHp: 32, baseDmg: 2, baseArm: 7 }
+  ],
+  weapon: [
+    { name: 'Кирка Шахтёра', baseHp: 0, baseDmg: 6, baseArm: 0 },
+    { name: 'Кованый Меч', baseHp: 4, baseDmg: 10, baseArm: 0 },
+    { name: 'Стальной Палаш', baseHp: 8, baseDmg: 15, baseArm: 1 },
+    { name: 'Обсидиановый Клинок', baseHp: 12, baseDmg: 21, baseArm: 1 },
+    { name: 'Рунный Секач Недр', baseHp: 18, baseDmg: 28, baseArm: 2 }
+  ],
+  offhand: [
+    { name: 'Шахтёрский Фонарь', baseHp: 8, baseDmg: 1, baseArm: 1 },
+    { name: 'Кованый Баклер', baseHp: 14, baseDmg: 0, baseArm: 3 },
+    { name: 'Стальной Тарч', baseHp: 24, baseDmg: 1, baseArm: 6 },
+    { name: 'Светоч Бездны', baseHp: 36, baseDmg: 3, baseArm: 8 },
+    { name: 'Щит Горного Титана', baseHp: 50, baseDmg: 4, baseArm: 12 }
+  ],
+  amulet: [
+    { name: 'Медный Кулон', baseHp: 8, baseDmg: 1, baseArm: 0 },
+    { name: 'Амулет Старателя', baseHp: 15, baseDmg: 2, baseArm: 1 },
+    { name: 'Рубиновый Талисман', baseHp: 25, baseDmg: 4, baseArm: 2 },
+    { name: 'Сердце Горы', baseHp: 38, baseDmg: 6, baseArm: 3 },
+    { name: 'Око Древней Бездны', baseHp: 55, baseDmg: 9, baseArm: 5 }
+  ],
+  ring: [
+    { name: 'Медное Кольцо', baseHp: 5, baseDmg: 1, baseArm: 0 },
+    { name: 'Кольцо Упорства', baseHp: 10, baseDmg: 2, baseArm: 1 },
+    { name: 'Стальная Печатка', baseHp: 18, baseDmg: 3, baseArm: 2 },
+    { name: 'Обсидиановый Обод', baseHp: 28, baseDmg: 5, baseArm: 3 },
+    { name: 'Мифриловое Кольцо Власти', baseHp: 40, baseDmg: 7, baseArm: 4 }
   ]
+};
+
+// ==========================================
+// SET ITEMS DEFINITION
+// ==========================================
+export interface SetBonus {
+  count: number;
+  description: string;
+  bonusHp?: number;
+  bonusDamage?: number;
+  bonusArmor?: number;
+  bonusPercentHp?: number;
+  bonusPercentDamage?: number;
+  bonusPercentArmor?: number;
+}
+
+export interface ItemSetInfo {
+  id: string;
+  name: string;
+  badge: string;
+  icon: string;
+  bonuses: SetBonus[];
+}
+
+export const ITEM_SETS: Record<string, ItemSetInfo> = {
+  titan: {
+    id: 'titan',
+    name: 'Сет Титана',
+    badge: 'ТИТАН',
+    icon: 'Shield',
+    bonuses: [
+      { count: 2, description: '+15% к Броне', bonusPercentArmor: 15 },
+      { count: 4, description: '+35 к Здоровью и несокрушимость', bonusHp: 35 }
+    ]
+  },
+  shadow: {
+    id: 'shadow',
+    name: 'Сет Теневого Старателя',
+    badge: 'ТЕНЬ',
+    icon: 'Sparkles',
+    bonuses: [
+      { count: 2, description: '+12% к Урону', bonusPercentDamage: 12 },
+      { count: 4, description: '+20% к Урону и Скорости атаки', bonusPercentDamage: 20 }
+    ]
+  },
+  mountain_king: {
+    id: 'mountain_king',
+    name: 'Сет Горного Короля',
+    badge: 'КОРОЛЬ',
+    icon: 'Crown',
+    bonuses: [
+      { count: 2, description: '+40 к Здоровью и +4 к Броне', bonusHp: 40, bonusArmor: 4 },
+      { count: 4, description: '+20 к Урону и +15% к Защите', bonusDamage: 20, bonusPercentArmor: 15 }
+    ]
+  }
 };
 
 // ==========================================
@@ -102,7 +192,8 @@ export function generateRPGItem(slot: ItemSlot, level: number = 0, forcedRarity?
     common: 1.0,
     magic: 1.15,
     rare: 1.30,
-    epic: 1.50
+    epic: 1.50,
+    legendary: 1.80
   };
   const rMulti = rarityMultipliers[rarity] * (1 + level * 0.15);
 
@@ -218,7 +309,7 @@ export function generateRPGItem(slot: ItemSlot, level: number = 0, forcedRarity?
     }
   }
 
-  // 4. Construct Display Name
+  // 4. Construct Display Name & Set Item Roll
   let finalName = baseTemplate.name;
   if (prefix && suffix) {
     finalName = `${prefix.name} ${baseTemplate.name} ${suffix.name}`;
@@ -226,6 +317,18 @@ export function generateRPGItem(slot: ItemSlot, level: number = 0, forcedRarity?
     finalName = `${prefix.name} ${baseTemplate.name}`;
   } else if (suffix) {
     finalName = `${baseTemplate.name} ${suffix.name}`;
+  }
+
+  // Roll set bonus affiliation for rare, epic, or legendary gear
+  let setId: string | undefined = undefined;
+  let setName: string | undefined = undefined;
+  if (rarity === 'rare' || rarity === 'epic' || (rarity as string) === 'legendary') {
+    if (Math.random() < 0.45) {
+      const setKeys = Object.keys(ITEM_SETS);
+      const chosenSet = ITEM_SETS[setKeys[Math.floor(Math.random() * setKeys.length)]];
+      setId = chosenSet.id;
+      setName = chosenSet.name;
+    }
   }
 
   return {
@@ -241,6 +344,8 @@ export function generateRPGItem(slot: ItemSlot, level: number = 0, forcedRarity?
     },
     prefix,
     suffix,
-    level: level + 1
+    level: level + 1,
+    setId,
+    setName
   };
 }

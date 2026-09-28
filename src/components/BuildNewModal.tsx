@@ -9,6 +9,7 @@ import {
   Home, 
   Shield, 
   Wrench, 
+  Landmark,
   X, 
   Check, 
   BicepsFlexed, 
@@ -38,6 +39,7 @@ const BUILDING_TYPES: BuildingType[] = [
 ];
 
 const ICONS: Record<BuildingType, React.ElementType> = {
+  town_hall: Landmark,
   forge: Hammer,
   smelter: Flame,
   tavern: Coffee,

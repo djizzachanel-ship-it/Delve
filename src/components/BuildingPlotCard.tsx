@@ -15,7 +15,8 @@ import {
   ArrowUpCircle,
   Sparkles,
   Zap,
-  ChevronRight
+  ChevronRight,
+  Landmark
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -28,6 +29,7 @@ interface BuildingPlotCardProps {
 }
 
 const BUILDING_ICONS: Record<BuildingType, React.ElementType> = {
+  town_hall: Landmark,
   forge: Hammer,
   smelter: Flame,
   tavern: Coffee,
@@ -45,6 +47,14 @@ const BUILDING_THEMES: Record<BuildingType, {
   badgeBg: string;
   ambientEffect: string;
 }> = {
+  town_hall: {
+    bgGradient: 'from-amber-950/90 via-slate-900 to-slate-950',
+    borderColor: 'border-amber-500/60 hover:border-amber-300',
+    glowColor: 'shadow-[0_0_25px_rgba(245,158,11,0.25)]',
+    accentColor: 'text-amber-300',
+    badgeBg: 'bg-amber-950/80 text-amber-300 border-amber-500/50',
+    ambientEffect: '🏛️ Чертог Старейшин'
+  },
   forge: {
     bgGradient: 'from-amber-950/80 via-red-950/60 to-slate-900',
     borderColor: 'border-amber-600/50 hover:border-amber-400',

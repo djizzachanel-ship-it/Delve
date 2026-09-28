@@ -322,7 +322,7 @@ export const updateGame = (
                        }
 
                        // Guaranteed RPG Item reward from ancient mine chest!
-                       const possibleSlots: ItemSlot[] = ['weapon', 'head', 'chest'];
+                       const possibleSlots: ItemSlot[] = ['weapon', 'head', 'chest', 'legs', 'boots', 'offhand', 'amulet', 'ring'];
                        const dropSlot = possibleSlots[Math.floor(Math.random() * possibleSlots.length)];
                        const itemFound = generateRPGItem(dropSlot, depth, Math.random() < 0.4 ? 'rare' : 'magic');
                        if (!g.accumulatedItems) g.accumulatedItems = [];

@@ -1,7 +1,16 @@
 import { Dweller } from './game/dwellers';
 
-export type ItemSlot = 'weapon' | 'head' | 'chest';
-export type Rarity = 'common' | 'magic' | 'rare' | 'epic';
+export type ItemSlot = 
+  | 'head'      // Шлем
+  | 'chest'     // Нагрудник/Доспех
+  | 'legs'      // Поножи
+  | 'boots'     // Сапоги
+  | 'weapon'    // Основное оружие
+  | 'offhand'   // Щит/Фонарь
+  | 'amulet'    // Амулет/Шея
+  | 'ring';     // Кольцо
+
+export type Rarity = 'common' | 'magic' | 'rare' | 'epic' | 'legendary';
 
 export interface ItemAffix {
   name: string;
@@ -21,10 +30,15 @@ export interface Item {
     health: number;
     damage: number;
     armor: number;
+    attackSpeed?: number;
+    critChance?: number;
   };
   prefix?: ItemAffix;
   suffix?: ItemAffix;
   level?: number;
+  // Set item affiliation
+  setId?: string;
+  setName?: string;
 }
 
 export interface Player {
@@ -120,9 +134,14 @@ export interface GameState {
   resources: Resources;
   inventory: Item[];
   equipment: {
-    weapon: Item | null;
     head: Item | null;
     chest: Item | null;
+    legs?: Item | null;
+    boots?: Item | null;
+    weapon: Item | null;
+    offhand?: Item | null;
+    amulet?: Item | null;
+    ring?: Item | null;
   };
   unlockedDepth: number; 
   depth: number;

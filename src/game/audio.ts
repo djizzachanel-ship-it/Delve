@@ -59,6 +59,20 @@ class SoundSystem {
     osc.stop(t + 0.05);
   }
 
+  // Universal sound dispatcher
+  public play(name: string = 'click') {
+    if (!this.enabled) return;
+    if (name === 'equip') {
+      this.playEquip();
+    } else if (name === 'loot') {
+      this.playLoot();
+    } else if (name === 'mine') {
+      this.playMining();
+    } else {
+      this.playClick();
+    }
+  }
+
   // Mining pickaxe hit stone
   public playMining() {
     if (!this.enabled) return;

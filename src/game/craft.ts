@@ -10,7 +10,7 @@ export interface CraftRecipe {
     metal: number;
     shards: number;
   };
-  baseItemName: Record<ItemSlot, string>;
+  baseItemName: Partial<Record<ItemSlot, string>>;
   rarityChances: { common: number; magic: number; rare: number; epic: number };
 }
 

@@ -248,8 +248,14 @@ export function SurfaceWorldView({
   const [bgSource, setBgSource] = useState<'custom' | 'default' | 'none'>('default');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isBgMenuOpen, setIsBgMenuOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [localShowGridLines, setLocalShowGridLines] = useState(showGridLines);
   const [bgNotification, setBgNotification] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setLocalShowGridLines(showGridLines);
+  }, [showGridLines]);
 
   // Load initial background (custom from localStorage or pre-rendered default /town_surface.jpg)
   useEffect(() => {
@@ -1190,6 +1196,34 @@ export function SurfaceWorldView({
       }
     }
 
+      // ================= CITY GRID SYSTEM OVERLAY =================
+      const shouldDrawGrid = showGridLines || localShowGridLines || state.isSiegeMode || Boolean(placementType);
+      if (shouldDrawGrid) {
+        ctx.save();
+        ctx.strokeStyle = state.isSiegeMode 
+          ? 'rgba(239, 68, 68, 0.3)' 
+          : placementType 
+          ? 'rgba(56, 189, 248, 0.35)' 
+          : 'rgba(255, 255, 255, 0.18)';
+        ctx.lineWidth = 1;
+        for (let gx = 0; gx < GRID_SIZE; gx++) {
+          for (let gy = 0; gy < GRID_SIZE; gy++) {
+            const p0 = gridToIso(gx, gy);
+            const p1 = gridToIso(gx + 1, gy);
+            const p2 = gridToIso(gx + 1, gy + 1);
+            const p3 = gridToIso(gx, gy + 1);
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.lineTo(p3.x, p3.y);
+            ctx.closePath();
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+
       // ================= 8. DRAW PLACED BUILDINGS (SORTED BY DEPTH) =================
       const plots = state.townPlots || [];
       const sortedPlots = [...plots].sort((a, b) => {
@@ -1206,18 +1240,45 @@ export function SurfaceWorldView({
         const gx = plot.tileX;
         const gy = plot.tileY;
         const bIso = gridToIso(gx + 1, gy + 1);
+        const isTownHall = bType === 'town_hall';
+
+        // Tower Defense: Range Circles for defensive buildings
+        if ((state.isSiegeMode || hoveredTile?.gx === gx) && (plot.isDefensive || isTownHall || bType === 'watchtower' || bType === 'workshop')) {
+          const rTiles = plot.attackRange || (isTownHall ? 5 : bType === 'watchtower' ? 6 : 4);
+          const rangePx = rTiles * (TILE_W / 2);
+          ctx.save();
+          ctx.strokeStyle = isTownHall ? 'rgba(245, 158, 11, 0.55)' : 'rgba(56, 189, 248, 0.55)';
+          ctx.fillStyle = isTownHall ? 'rgba(245, 158, 11, 0.08)' : 'rgba(56, 189, 248, 0.08)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          ctx.ellipse(bIso.x, bIso.y, rangePx, rangePx * 0.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
 
         // Building Ground Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
         ctx.beginPath();
-        ctx.ellipse(bIso.x, bIso.y + 12, 42, 20, 0, 0, Math.PI * 2);
+        ctx.ellipse(bIso.x, bIso.y + 12, isTownHall ? 52 : 42, isTownHall ? 24 : 20, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        const wallH = 36 + plot.level * 3;
-        const bW = 48;
+        const wallH = isTownHall ? (50 + plot.level * 4) : (36 + plot.level * 3);
+        const bW = isTownHall ? 56 : 48;
 
         // Front-Left Wall
-        ctx.fillStyle = bType === 'forge' ? '#451a03' : bType === 'smelter' ? '#3b0764' : bType === 'tavern' ? '#78350f' : '#1e293b';
+        ctx.fillStyle = isTownHall 
+          ? '#1e293b' 
+          : bType === 'forge' 
+          ? '#451a03' 
+          : bType === 'smelter' 
+          ? '#3b0764' 
+          : bType === 'tavern' 
+          ? '#78350f' 
+          : bType === 'watchtower'
+          ? '#334155'
+          : '#1e293b';
         ctx.beginPath();
         ctx.moveTo(bIso.x, bIso.y + 10);
         ctx.lineTo(bIso.x - bW / 2, bIso.y - 2);
@@ -1227,7 +1288,17 @@ export function SurfaceWorldView({
         ctx.fill();
 
         // Front-Right Wall
-        ctx.fillStyle = bType === 'forge' ? '#7c2d12' : bType === 'smelter' ? '#581c87' : bType === 'tavern' ? '#92400e' : '#334155';
+        ctx.fillStyle = isTownHall 
+          ? '#334155' 
+          : bType === 'forge' 
+          ? '#7c2d12' 
+          : bType === 'smelter' 
+          ? '#581c87' 
+          : bType === 'tavern' 
+          ? '#92400e' 
+          : bType === 'watchtower'
+          ? '#475569'
+          : '#334155';
         ctx.beginPath();
         ctx.moveTo(bIso.x, bIso.y + 10);
         ctx.lineTo(bIso.x + bW / 2, bIso.y - 2);
@@ -1236,21 +1307,42 @@ export function SurfaceWorldView({
         ctx.closePath();
         ctx.fill();
 
-        // Roof: Gabled Timber Roof with ridge
+        // Roof: Gabled Timber / Stone Roof with ridge
+        const roofExtraH = isTownHall ? 28 : 22;
         // Left Roof Slope
-        ctx.fillStyle = bType === 'forge' ? '#b45309' : bType === 'smelter' ? '#7e22ce' : bType === 'tavern' ? '#b45309' : '#0284c7';
+        ctx.fillStyle = isTownHall 
+          ? '#1d4ed8' 
+          : bType === 'forge' 
+          ? '#b45309' 
+          : bType === 'smelter' 
+          ? '#7e22ce' 
+          : bType === 'tavern' 
+          ? '#b45309' 
+          : bType === 'watchtower'
+          ? '#0284c7'
+          : '#0284c7';
         ctx.beginPath();
         ctx.moveTo(bIso.x, bIso.y - wallH + 12);
         ctx.lineTo(bIso.x - bW / 2, bIso.y - wallH);
-        ctx.lineTo(bIso.x, bIso.y - wallH - 22);
+        ctx.lineTo(bIso.x, bIso.y - wallH - roofExtraH);
         ctx.closePath();
         ctx.fill();
 
         // Right Roof Slope
-        ctx.fillStyle = bType === 'forge' ? '#d97706' : bType === 'smelter' ? '#9333ea' : bType === 'tavern' ? '#d97706' : '#0ea5e9';
+        ctx.fillStyle = isTownHall 
+          ? '#2563eb' 
+          : bType === 'forge' 
+          ? '#d97706' 
+          : bType === 'smelter' 
+          ? '#9333ea' 
+          : bType === 'tavern' 
+          ? '#d97706' 
+          : bType === 'watchtower'
+          ? '#38bdf8'
+          : '#0ea5e9';
         ctx.beginPath();
         ctx.moveTo(bIso.x, bIso.y - wallH + 12);
-        ctx.lineTo(bIso.x, bIso.y - wallH - 22);
+        ctx.lineTo(bIso.x, bIso.y - wallH - roofExtraH);
         ctx.lineTo(bIso.x + bW / 2, bIso.y - wallH);
         ctx.closePath();
         ctx.fill();
@@ -1262,7 +1354,45 @@ export function SurfaceWorldView({
         ctx.fillRect(bIso.x - 16, bIso.y - wallH / 2 - 2, 7, 7);
 
         // Special visual accessories per building
-        if (bType === 'forge') {
+        if (isTownHall) {
+          // Central Grand Portico Doorway with Arch
+          ctx.fillStyle = '#fbbf24';
+          ctx.fillRect(bIso.x - 6, bIso.y - 4, 12, 14);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(bIso.x - 4.5, bIso.y - 2, 9, 12);
+
+          // Tower Bell / Clock Spire atop roof
+          const spireX = bIso.x;
+          const spireY = bIso.y - wallH - roofExtraH;
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(spireX - 8, spireY - 14, 16, 14);
+          ctx.fillStyle = '#fbbf24';
+          ctx.beginPath();
+          ctx.moveTo(spireX, spireY - 26);
+          ctx.lineTo(spireX - 9, spireY - 14);
+          ctx.lineTo(spireX + 9, spireY - 14);
+          ctx.closePath();
+          ctx.fill();
+
+          // Animated City Flag / Banner fluttering in wind
+          const bannerWave = Math.sin(tick * 0.12) * 3;
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.moveTo(spireX, spireY - 26);
+          ctx.lineTo(spireX + 13 + bannerWave, spireY - 22);
+          ctx.lineTo(spireX, spireY - 18);
+          ctx.closePath();
+          ctx.fill();
+
+          // Fortress Ballista Mount (Tower Defense Ready)
+          ctx.fillStyle = '#78350f';
+          ctx.fillRect(bIso.x + 10, bIso.y - wallH - 8, 12, 6);
+          ctx.fillStyle = '#e2e8f0';
+          ctx.beginPath();
+          ctx.moveTo(bIso.x + 12, bIso.y - wallH - 5);
+          ctx.lineTo(bIso.x + 22, bIso.y - wallH - 12);
+          ctx.stroke();
+        } else if (bType === 'forge') {
           // Open Forge fire pit glowing orange
           ctx.fillStyle = '#ea580c';
           ctx.beginPath();
@@ -1303,20 +1433,46 @@ export function SurfaceWorldView({
           }
         }
 
-        // Floating Dark Pill Label (Matching screenshot: "Таверна", "Кузница", "Плавильня"...)
-        const shortName = bInfo?.name ? bInfo.name.split('«')[0].trim() : bType;
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        // Tower Defense: Building HP Bar & Battle stats
+        if (state.isSiegeMode) {
+          const curHp = plot.hp !== undefined ? plot.hp : (plot.maxHp || 1000);
+          const maxHp = plot.maxHp || 1000;
+          const hpPct = Math.max(0, Math.min(1, curHp / maxHp));
+          const barW = isTownHall ? 64 : 52;
+          const barH = 5;
+          const barX = bIso.x - barW / 2;
+          const barY = bIso.y - wallH - (isTownHall ? 66 : 50);
+
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+          ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+          ctx.fillStyle = hpPct > 0.5 ? '#10b981' : hpPct > 0.25 ? '#f59e0b' : '#ef4444';
+          ctx.fillRect(barX, barY, barW * hpPct, barH);
+
+          if (plot.isDefensive || isTownHall || bType === 'watchtower') {
+            ctx.fillStyle = '#fde047';
+            ctx.font = 'bold 8px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`⚔️ ${plot.damage || 25} ATK`, bIso.x, barY - 3);
+          }
+        }
+
+        // Floating Dark Pill Label
+        const shortName = isTownHall ? 'Ратуша' : bInfo?.name ? bInfo.name.split('«')[0].trim() : bType;
+        const pillY = bIso.y - wallH - (isTownHall ? 54 : 36);
+        const pillW = isTownHall ? 92 : 84;
+
+        ctx.fillStyle = isTownHall ? 'rgba(15, 23, 42, 0.95)' : 'rgba(15, 23, 42, 0.88)';
         ctx.beginPath();
-        ctx.roundRect(bIso.x - 42, bIso.y - wallH - 36, 84, 18, 6);
+        ctx.roundRect(bIso.x - pillW / 2, pillY, pillW, 18, 6);
         ctx.fill();
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = isTownHall ? '#fbbf24' : '#f59e0b';
+        ctx.lineWidth = isTownHall ? 1.8 : 1.2;
         ctx.stroke();
 
-        ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 9px sans-serif';
+        ctx.fillStyle = isTownHall ? '#fef08a' : '#f8fafc';
+        ctx.font = isTownHall ? 'bold 9.5px sans-serif' : 'bold 9px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`${shortName}`, bIso.x, bIso.y - wallH - 24);
+        ctx.fillText(isTownHall ? `🏛️ ${shortName} (Ур.${plot.level || 1})` : `${shortName}`, bIso.x, pillY + 12);
       }
 
       // ================= 9. WALKING ADVENTURER (PLAYER HERO) =================
@@ -1930,7 +2086,11 @@ export function SurfaceWorldView({
             (gy === plot.tileY || gy === plot.tileY + 1)
           ) {
             sound.playHit();
-            onOpenPlot(plot);
+            if (plot.buildingType === 'town_hall' && onOpenTownHall) {
+              onOpenTownHall(plot);
+            } else {
+              onOpenPlot(plot);
+            }
             return;
           }
         }
@@ -1947,6 +2107,12 @@ export function SurfaceWorldView({
 
   const handleResetCamera = () => {
     setCamera({ x: -10, y: -90, zoom: 1.0 });
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const zoomDelta = e.deltaY < 0 ? 0.12 : -0.12;
+    handleZoom(zoomDelta);
   };
 
   // Filtered buildings for construction drawer
@@ -2018,176 +2184,234 @@ export function SurfaceWorldView({
         )}
       </AnimatePresence>
 
-      {/* ================= TOP CONTROLS HUD ================= */}
-      <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
-        {/* Time of Day Switcher */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-950/85 border border-slate-800 rounded-2xl backdrop-blur-md shadow-lg pointer-events-auto">
+      {/* ================= TOP RIGHT COMPACT VIEW SETTINGS ICON ================= */}
+      <div className="absolute top-3 right-3 z-30 flex items-center gap-2 pointer-events-auto">
+        <div className="relative">
           <button
-            onClick={() => setTimeOfDay('dawn')}
-            className={`p-1.5 rounded-xl transition-all ${timeOfDay === 'dawn' ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50' : 'text-slate-400 hover:text-slate-200'}`}
-            title="Рассвет"
+            onClick={() => setIsSettingsOpen(prev => !prev)}
+            className={`p-2.5 rounded-2xl border backdrop-blur-md shadow-xl transition-all flex items-center justify-center cursor-pointer ${
+              isSettingsOpen 
+                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)]' 
+                : 'bg-slate-950/85 hover:bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
+            }`}
+            title="Настройки вида и карты"
           >
-            <Sunrise size={15} />
+            <Settings size={18} className={isSettingsOpen ? 'rotate-90 transition-transform duration-300' : 'transition-transform duration-300'} />
           </button>
-          <button
-            onClick={() => setTimeOfDay('day')}
-            className={`p-1.5 rounded-xl transition-all ${timeOfDay === 'day' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-slate-200'}`}
-            title="День"
-          >
-            <Sun size={15} />
-          </button>
-          <button
-            onClick={() => setTimeOfDay('sunset')}
-            className={`p-1.5 rounded-xl transition-all ${timeOfDay === 'sunset' ? 'bg-orange-500/30 text-orange-300 border border-orange-500/50' : 'text-slate-400 hover:text-slate-200'}`}
-            title="Закат"
-          >
-            <Sunset size={15} />
-          </button>
-          <button
-            onClick={() => setTimeOfDay('night')}
-            className={`p-1.5 rounded-xl transition-all ${timeOfDay === 'night' ? 'bg-indigo-900 text-indigo-200 border border-indigo-500/50' : 'text-slate-400 hover:text-slate-200'}`}
-            title="Ночь"
-          >
-            <Moon size={15} />
-          </button>
-        </div>
 
-        {/* Right HUD Controls: Background Settings & Camera */}
-        <div className="flex items-center gap-2 pointer-events-auto">
-          {/* Background Manager Popover */}
-          <div className="relative">
-            <button
-              onClick={() => setIsBgMenuOpen(prev => !prev)}
-              className={`px-2.5 py-1.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 bg-slate-950/85 border backdrop-blur-md shadow-lg ${
-                bgSource === 'custom'
-                  ? 'border-emerald-500/60 text-emerald-300 bg-emerald-950/40'
-                  : 'border-slate-800 text-slate-300 hover:text-white'
-              }`}
-              title="Настройки фона городка"
-            >
-              <ImageIcon size={15} className={bgSource === 'custom' ? 'text-emerald-400' : 'text-amber-400'} />
-              <span>Фон</span>
-              {bgSource === 'custom' && (
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              )}
-            </button>
+          {/* View Settings Dropdown */}
+          <AnimatePresence>
+            {isSettingsOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="absolute right-0 top-12 w-72 p-3 bg-slate-950/95 border border-slate-700/80 rounded-2xl shadow-2xl backdrop-blur-xl z-50 flex flex-col gap-3"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="text-xs font-black text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <Settings size={14} className="text-amber-400" />
+                    Настройки карты
+                  </span>
+                  <button
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
 
-            {/* Background Dropdown / Modal */}
-            <AnimatePresence>
-              {isBgMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  className="absolute right-0 top-11 w-72 p-3 bg-slate-950/95 border border-slate-700/80 rounded-2xl shadow-2xl backdrop-blur-xl z-50 flex flex-col gap-2.5"
-                >
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                      <ImageIcon size={14} className="text-amber-400" />
-                      Фон поверхности городка
-                    </span>
+                {/* 1. Time of Day */}
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">
+                    Время суток
+                  </span>
+                  <div className="grid grid-cols-4 gap-1 p-1 bg-slate-900/90 border border-slate-800 rounded-xl">
                     <button
-                      onClick={() => setIsBgMenuOpen(false)}
-                      className="text-slate-400 hover:text-white p-1"
+                      onClick={() => setTimeOfDay('dawn')}
+                      className={`p-1.5 rounded-lg text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        timeOfDay === 'dawn' ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="Рассвет"
                     >
-                      <X size={14} />
+                      <Sunrise size={14} />
+                      <span className="text-[9px]">Рассвет</span>
+                    </button>
+                    <button
+                      onClick={() => setTimeOfDay('day')}
+                      className={`p-1.5 rounded-lg text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        timeOfDay === 'day' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="День"
+                    >
+                      <Sun size={14} />
+                      <span className="text-[9px]">День</span>
+                    </button>
+                    <button
+                      onClick={() => setTimeOfDay('sunset')}
+                      className={`p-1.5 rounded-lg text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        timeOfDay === 'sunset' ? 'bg-orange-500/25 text-orange-300 border border-orange-500/40' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="Закат"
+                    >
+                      <Sunset size={14} />
+                      <span className="text-[9px]">Закат</span>
+                    </button>
+                    <button
+                      onClick={() => setTimeOfDay('night')}
+                      className={`p-1.5 rounded-lg text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        timeOfDay === 'night' ? 'bg-indigo-900/80 text-indigo-200 border border-indigo-500/40' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="Ночь"
+                    >
+                      <Moon size={14} />
+                      <span className="text-[9px]">Ночь</span>
                     </button>
                   </div>
+                </div>
 
-                  <div className="text-[11px] text-slate-400 leading-relaxed">
-                    {bgSource === 'custom' ? (
-                      <span className="text-emerald-400 font-semibold">
-                        ✅ Активен ваш пользовательский арт
-                      </span>
-                    ) : (
-                      <span>
-                        Активен стандартный 3D арт (горы, луг, река, шахта)
-                      </span>
-                    )}
+                {/* 2. Zoom & Camera */}
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">
+                    Камера и Масштаб
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleZoom(0.15)}
+                      className="flex-1 py-1.5 px-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <ZoomIn size={14} /> +
+                    </button>
+                    <button
+                      onClick={() => handleZoom(-0.15)}
+                      className="flex-1 py-1.5 px-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <ZoomOut size={14} /> -
+                    </button>
+                    <button
+                      onClick={handleResetCamera}
+                      className="flex-1 py-1.5 px-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                      title="Центрировать камеру"
+                    >
+                      <RotateCcw size={14} /> Центр
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. City Grid System & Tower Defense Toggles */}
+                <div className="space-y-1.5 pt-1 border-t border-slate-800">
+                  {/* Grid Toggle */}
+                  <button
+                    onClick={() => setLocalShowGridLines(prev => !prev)}
+                    className="w-full py-1.5 px-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-bold flex items-center justify-between text-slate-200 transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span>📐</span> Координатная сетка
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
+                      localShowGridLines ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-slate-800 text-slate-400'
+                    }`}>
+                      {localShowGridLines ? 'ВКЛ' : 'ВЫКЛ'}
+                    </span>
+                  </button>
+
+                  {/* Tower Defense Toggle */}
+                  <button
+                    onClick={() => dispatch({ type: 'TOGGLE_SIEGE_MODE' })}
+                    className={`w-full py-1.5 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                      state.isSiegeMode 
+                        ? 'bg-rose-950/60 border-rose-500/60 text-rose-300' 
+                        : 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span>🛡️</span> Режим осады (TD)
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
+                      state.isSiegeMode ? 'bg-rose-500 text-white animate-pulse' : 'bg-slate-800 text-slate-400'
+                    }`}>
+                      {state.isSiegeMode ? 'БОЙ' : 'МИР'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* 4. Background Art */}
+                <div className="pt-1 border-t border-slate-800 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">
+                      Фон поверхности
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-mono">
+                      {bgSource === 'custom' ? 'Пользовательский' : '3D Диорама'}
+                    </span>
                   </div>
 
-                  {/* Upload button */}
                   <button
-                    onClick={() => {
-                      fileInputRef.current?.click();
-                      setIsBgMenuOpen(false);
-                    }}
-                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-1.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <Upload size={14} />
+                    <Upload size={13} />
                     Загрузить свой арт (PNG/JPG)
                   </button>
 
-                  {/* Reset button if custom */}
                   {bgSource === 'custom' && (
                     <button
-                      onClick={() => {
-                        handleResetBg();
-                        setIsBgMenuOpen(false);
-                      }}
-                      className="w-full py-1.5 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                      onClick={handleResetBg}
+                      className="w-full py-1 px-3 rounded-xl bg-slate-900/60 hover:bg-slate-800 text-rose-400 hover:text-rose-300 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
                     >
-                      <Trash2 size={13} className="text-rose-400" />
-                      Сбросить на 3D диораму
+                      <Trash2 size={12} />
+                      Сбросить фон на 3D арт
                     </button>
                   )}
-
-                  <div className="text-[10px] text-slate-500 bg-slate-900/80 p-2 rounded-xl border border-slate-800/80">
-                    💡 Совет: можно просто перетащить файл картинки мышкой прямо на экран игры!
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Camera Controls */}
-          <div className="flex items-center gap-1 p-1 bg-slate-950/85 border border-slate-800 rounded-2xl backdrop-blur-md shadow-lg pointer-events-auto">
-            <button
-              onClick={() => handleZoom(0.15)}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-white transition-colors"
-              title="Приблизить"
-            >
-              <ZoomIn size={15} />
-            </button>
-            <button
-              onClick={() => handleZoom(-0.15)}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-white transition-colors"
-              title="Отдалить"
-            >
-              <ZoomOut size={15} />
-            </button>
-            <button
-              onClick={handleResetCamera}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-white transition-colors"
-              title="Центрировать"
-            >
-              <RotateCcw size={15} />
-            </button>
-          </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
-      {/* ================= ACTIVE PLACEMENT / RELOCATION BANNER ================= */}
+      {/* ================= TOP TACTICAL SIEGE MODE BANNER ================= */}
+      {state.isSiegeMode && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+          <div className="px-4 py-2 bg-gradient-to-r from-rose-950/90 via-slate-900/90 to-rose-950/90 border border-rose-500/70 rounded-2xl shadow-[0_0_25px_rgba(244,63,94,0.35)] backdrop-blur-md flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping flex-shrink-0" />
+            <div className="text-xs font-black text-rose-200 flex items-center gap-1.5">
+              <span>🛡️ РЕЖИМ ОСАДЫ (Tower Defense)</span>
+              <span className="text-slate-400 font-normal">|</span>
+              <span className="text-[11px] text-amber-300 font-mono">Башни и баллиста активны</span>
+            </div>
+            <button
+              onClick={() => dispatch({ type: 'TOGGLE_SIEGE_MODE', enabled: false })}
+              className="ml-2 py-0.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
+            >
+              Выключить
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= ACTIVE PLACEMENT BANNER ================= */}
       <AnimatePresence>
         {placementType && activePlacementInfo && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="absolute top-14 left-3 right-3 z-30 p-3 rounded-2xl bg-slate-950/95 border border-amber-500/60 shadow-2xl backdrop-blur-md flex items-center justify-between gap-3"
+            className="absolute top-3 left-4 right-16 z-30 p-2.5 rounded-2xl bg-slate-950/95 border border-amber-500/70 shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 pointer-events-auto"
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-500/50 flex items-center justify-center text-cyan-400 flex-shrink-0">
-                {activeRelocatePlot ? <Move size={18} /> : React.createElement(ICONS[placementType] || Hammer, { size: 18 })}
+              <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/50 flex items-center justify-center text-cyan-400 flex-shrink-0">
+                {activeRelocatePlot ? <Move size={16} /> : React.createElement(ICONS[placementType] || Hammer, { size: 16 })}
               </div>
               <div className="min-w-0">
                 <div className="text-xs font-black text-slate-100 flex items-center gap-1.5 truncate">
-                  <span>{activeRelocatePlot ? 'Перемещение:' : 'Установка:'}</span>
+                  <span>{activeRelocatePlot ? 'Перемещение:' : 'Постройка:'}</span>
                   <span className="text-amber-300">{activePlacementInfo.name.split('«')[0]}</span>
                 </div>
                 <div className="text-[11px] text-slate-300 truncate">
                   {placementValidity.valid 
-                    ? 'Наведите на свободную поляну и кликните для постройки' 
+                    ? 'Наведите на свободную ячейку сетки и кликните для установки' 
                     : <span className="text-rose-400 font-bold">{placementValidity.reason}</span>}
                 </div>
               </div>
@@ -2198,6 +2422,7 @@ export function SurfaceWorldView({
                 setPlacementType(null);
                 setActiveRelocatePlot(null);
                 onClearRelocate?.();
+                onClearPlacement?.();
                 sound.playHit();
               }}
               className="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-colors flex-shrink-0 flex items-center gap-1 cursor-pointer"
@@ -2208,219 +2433,28 @@ export function SurfaceWorldView({
         )}
       </AnimatePresence>
 
-      {/* ================= MAIN INTERACTIVE CANVAS WORLD ================= */}
-      <div className="flex-1 w-full h-full relative cursor-grab active:cursor-grabbing">
+      {/* ================= MAIN INTERACTIVE CANVAS WORLD (100% HEIGHT) ================= */}
+      <div 
+        ref={containerRef}
+        className="flex-1 w-full h-full relative cursor-grab active:cursor-grabbing overflow-hidden"
+      >
         <canvas
           ref={canvasRef}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onWheel={handleWheel}
           onContextMenu={(e) => {
             e.preventDefault();
             if (placementType) {
               setPlacementType(null);
               setActiveRelocatePlot(null);
               onClearRelocate?.();
+              onClearPlacement?.();
             }
           }}
           className="w-full h-full block touch-none"
         />
-      </div>
-
-      {/* ================= EXPANDED CONSTRUCTION DRAWER & MENU ================= */}
-      <div className="z-20 bg-slate-950/95 border-t border-slate-800/90 shadow-[0_-10px_30px_rgba(0,0,0,0.85)] backdrop-blur-md transition-all">
-        {/* Toggle Header Bar */}
-        <div 
-          onClick={() => setIsMenuExpanded(!isMenuExpanded)}
-          className="p-2.5 px-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-900/60 transition-colors"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-              <Hammer size={16} />
-            </div>
-            <div>
-              <span className="text-xs font-black text-slate-100 uppercase tracking-wider block">
-                Меню строительства поселения
-              </span>
-              <span className="text-[10px] text-slate-400">
-                {isMenuExpanded ? 'Нажмите, чтобы скрыть панель' : 'Нажмите, чтобы открыть расширенный каталог зданий'}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded-full">
-              Построено: {(state.townPlots || []).filter(p => p.buildingType !== null).length}
-            </span>
-            <button className="p-1 text-slate-400 hover:text-white">
-              {isMenuExpanded ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-            </button>
-          </div>
-        </div>
-
-        {/* Expanded Catalog Cards Section */}
-        <AnimatePresence>
-          {isMenuExpanded ? (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden border-t border-slate-800/80 px-3.5 pb-4 pt-2.5 space-y-3"
-            >
-              {/* Category Tabs */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                {CATEGORIES.map(cat => (
-                  <button
-                    key={cat.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedCategory(cat.id);
-                    }}
-                    className={`py-1 px-3 rounded-xl text-xs font-bold transition-all flex-shrink-0 cursor-pointer ${
-                      selectedCategory === cat.id
-                        ? 'bg-amber-500 text-slate-950 shadow'
-                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
-              </div>
-
-              {/* Grid of Detailed Building Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-[46vh] overflow-y-auto pr-1">
-                {filteredBuildings.map(type => {
-                  const bInfo = BUILDINGS_CONFIG[type];
-                  const cost = bInfo.getCost(0);
-                  const canAfford = 
-                    state.resources.ore >= cost.ore &&
-                    state.resources.metal >= cost.metal &&
-                    state.resources.shards >= cost.shards;
-                  const IconComp = ICONS[type];
-                  const existingPlots = (state.townPlots || []).filter(p => p.buildingType === type);
-
-                  return (
-                    <div
-                      key={type}
-                      className="p-3 rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800 hover:border-slate-700 shadow-lg flex flex-col justify-between gap-2.5 transition-all"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 flex-shrink-0">
-                          <IconComp size={20} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-black text-slate-100 truncate">
-                              {bInfo.name.split('«')[0]}
-                            </h4>
-                            {existingPlots.length > 0 && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-500/30">
-                                Установлено ({existingPlots.length})
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5">
-                            {bInfo.description}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Cost and Action row */}
-                      <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                        {/* Cost badges */}
-                        <div className="flex items-center gap-1.5 font-mono text-[10px] font-bold">
-                          <span className={state.resources.ore >= cost.ore ? 'text-amber-300' : 'text-rose-400'}>
-                            ⛏️{cost.ore}
-                          </span>
-                          <span className={state.resources.metal >= cost.metal ? 'text-slate-300' : 'text-rose-400'}>
-                            🔩{cost.metal}
-                          </span>
-                          {cost.shards > 0 && (
-                            <span className={state.resources.shards >= cost.shards ? 'text-sky-300' : 'text-rose-400'}>
-                              💎{cost.shards}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Place Button */}
-                        <button
-                          onClick={() => {
-                            setPlacementType(type);
-                            setActiveRelocatePlot(null);
-                            setIsMenuExpanded(false);
-                            sound.playMining();
-                          }}
-                          className={`py-1.5 px-3 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all shadow cursor-pointer ${
-                            canAfford
-                              ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 active:scale-95'
-                              : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                          }`}
-                        >
-                          <MapPin size={13} />
-                          <span>Выбрать место</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          ) : (
-            // Minimized quick carousel
-            <div className="flex gap-2 overflow-x-auto p-2.5 pt-0 scrollbar-none">
-              {BUILDABLE_TYPES.map((type) => {
-                const bInfo = BUILDINGS_CONFIG[type];
-                const cost = bInfo.getCost(0);
-                const canAfford = 
-                  state.resources.ore >= cost.ore &&
-                  state.resources.metal >= cost.metal &&
-                  state.resources.shards >= cost.shards;
-                const IconComp = ICONS[type];
-                const isSelected = placementType === type;
-
-                return (
-                  <button
-                    key={type}
-                    onClick={() => {
-                      if (isSelected) {
-                        setPlacementType(null);
-                        setActiveRelocatePlot(null);
-                      } else {
-                        setPlacementType(type);
-                        setActiveRelocatePlot(null);
-                        sound.playMining();
-                      }
-                    }}
-                    className={`flex-shrink-0 flex items-center gap-2.5 p-2 rounded-xl border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-md ring-2 ring-cyan-500/40'
-                        : canAfford
-                        ? 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 text-slate-200 hover:border-slate-700'
-                        : 'bg-slate-950/50 border-slate-900 text-slate-500 opacity-60'
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-amber-400 border border-slate-700/60'}`}>
-                      <IconComp size={16} />
-                    </div>
-                    <div className="text-left">
-                      <div className="text-[11px] font-bold truncate max-w-[95px]">
-                        {bInfo.name.split('«')[0]}
-                      </div>
-                      <div className="text-[9.5px] font-mono flex items-center gap-1.5 mt-0.5">
-                        <span className={state.resources.ore >= cost.ore ? 'text-amber-300' : 'text-rose-400'}>
-                          ⛏️{cost.ore}
-                        </span>
-                        <span className={state.resources.metal >= cost.metal ? 'text-slate-300' : 'text-rose-400'}>
-                          🔩{cost.metal}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </AnimatePresence>
       </div>
     </div>
   );

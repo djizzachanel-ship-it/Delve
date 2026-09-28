@@ -58,7 +58,16 @@ export const defaultInitialState: GameState = {
   player: { baseHealth: 55, health: 55, baseDamage: 7, baseArmor: 1, level: 1, xp: 0 },
   resources: { ore: 35, metal: 18, shards: 1 },
   inventory: [],
-  equipment: { weapon: null, head: null, chest: null },
+  equipment: { 
+    head: null, 
+    chest: null, 
+    legs: null, 
+    boots: null, 
+    weapon: null, 
+    offhand: null, 
+    amulet: null, 
+    ring: null 
+  },
   unlockedDepth: 0, 
   depth: 0,
   cartModules: {
@@ -91,19 +100,45 @@ export function loadSavedState(): GameState {
       if (parsed && parsed.player && parsed.resources) {
         // Migration to plots if missing
         let plots: TownPlot[] = Array.isArray(parsed.townPlots) ? parsed.townPlots : createDefaultPlots();
+        const hasTownHall = plots.some(p => p.buildingType === 'town_hall');
+        if (!hasTownHall) {
+          const defaultTownHall = createDefaultPlots()[0];
+          plots = [defaultTownHall, ...plots];
+        }
+
         const defaultCoords = [
-          { x: 5, y: 5 },
-          { x: 13, y: 5 },
-          { x: 5, y: 13 },
-          { x: 13, y: 13 },
-          { x: 9, y: 4 },
-          { x: 9, y: 14 }
+          { x: 9, y: 8 },
+          { x: 14, y: 9 },
+          { x: 11, y: 4 },
+          { x: 5, y: 10 },
+          { x: 10, y: 14 },
+          { x: 15, y: 14 }
         ];
-        plots = plots.map((p, idx) => ({
-          ...p,
-          tileX: p.tileX !== undefined ? p.tileX : defaultCoords[idx % defaultCoords.length].x,
-          tileY: p.tileY !== undefined ? p.tileY : defaultCoords[idx % defaultCoords.length].y,
-        }));
+
+        plots = plots.map((p, idx) => {
+          const tX = p.tileX !== undefined ? p.tileX : defaultCoords[idx % defaultCoords.length].x;
+          const tY = p.tileY !== undefined ? p.tileY : defaultCoords[idx % defaultCoords.length].y;
+          const defStats = p.buildingType ? getBuildingDefenseStats(p.buildingType, p.level || 1) : null;
+
+          return {
+            ...p,
+            tileX: tX,
+            tileY: tY,
+            positionGrid: p.positionGrid || {
+              x: tX,
+              y: tY,
+              width: 2,
+              height: 2
+            },
+            isDefensive: p.isDefensive !== undefined ? p.isDefensive : (defStats?.isDefensive || false),
+            damage: p.damage !== undefined ? p.damage : defStats?.damage,
+            attackRange: p.attackRange !== undefined ? p.attackRange : defStats?.attackRange,
+            attackSpeed: p.attackSpeed !== undefined ? p.attackSpeed : defStats?.attackSpeed,
+            targetType: p.targetType || defStats?.targetType,
+            hp: p.hp !== undefined ? p.hp : (defStats?.hp || 800),
+            maxHp: p.maxHp !== undefined ? p.maxHp : (defStats?.maxHp || 800),
+          };
+        });
         let dwellers: Dweller[] = Array.isArray(parsed.dwellers) && parsed.dwellers.length > 0 ? parsed.dwellers : INITIAL_DWELLERS;
 
         return {
