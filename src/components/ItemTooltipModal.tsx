@@ -509,35 +509,45 @@ export const ItemTooltipModal: React.FC<ItemTooltipModalProps> = ({
           )}
 
           {/* Prefixes and Suffixes Affixes Section */}
-          {(item.prefix || item.suffix) && (
+          {((item.prefixes && item.prefixes.length > 0) || (item.suffixes && item.suffixes.length > 0)) && (
             <div className="space-y-1.5 p-3 rounded-2xl bg-slate-900/70 border border-slate-800">
               <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
                 Магические свойства
               </span>
               
-              {item.prefix && (
-                <div className="flex items-start gap-2 text-xs">
+              {item.prefixes && item.prefixes.map((pref, pIdx) => (
+                <div key={`pref-${pIdx}`} className="flex items-start gap-2 text-xs">
                   <div className="p-1 rounded bg-indigo-950 border border-indigo-700/60 text-indigo-400 mt-0.5 flex-shrink-0">
                     <Zap size={11} />
                   </div>
-                  <div>
-                    <span className="font-bold text-indigo-300">{item.prefix.name}: </span>
-                    <span className="text-slate-300">{item.prefix.description}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-indigo-300">{pref.name}</span>
+                      <span className="text-[9px] px-1 py-0.2 rounded font-mono font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-500/40">
+                        T{pref.tier}
+                      </span>
+                    </div>
+                    <span className="text-slate-300 text-[11px] block">{pref.description}</span>
                   </div>
                 </div>
-              )}
+              ))}
 
-              {item.suffix && (
-                <div className="flex items-start gap-2 text-xs">
+              {item.suffixes && item.suffixes.map((suff, sIdx) => (
+                <div key={`suff-${sIdx}`} className="flex items-start gap-2 text-xs">
                   <div className="p-1 rounded bg-amber-950 border border-amber-700/60 text-amber-400 mt-0.5 flex-shrink-0">
                     <Sparkles size={11} />
                   </div>
-                  <div>
-                    <span className="font-bold text-amber-300">{item.suffix.name}: </span>
-                    <span className="text-slate-300">{item.suffix.description}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-amber-300">{suff.name}</span>
+                      <span className="text-[9px] px-1 py-0.2 rounded font-mono font-bold bg-amber-950/80 text-amber-300 border border-amber-500/40">
+                        T{suff.tier}
+                      </span>
+                    </div>
+                    <span className="text-slate-300 text-[11px] block">{suff.description}</span>
                   </div>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
@@ -581,7 +591,7 @@ export const ItemTooltipModal: React.FC<ItemTooltipModalProps> = ({
 
           {/* Item Tier and Level */}
           <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 pt-1">
-            <span>Уровень предмета: {item.level || 1}</span>
+            <span>Тир предмета: <b className="text-amber-400 font-mono">T{item.tier || 1}</b></span>
             <span>Базовый образец: {item.baseName || item.name}</span>
           </div>
         </div>

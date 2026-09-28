@@ -176,7 +176,7 @@ export function HeroScreen({ state, dispatch, onGoToTown }: HeroScreenProps) {
 
               {/* Tier / Level badge */}
               <span className="absolute bottom-1 right-1 font-mono text-[8.5px] font-black text-slate-300 bg-slate-950/80 px-1 rounded">
-                Т{item.level || 1}
+                Т{item.tier}
               </span>
             </>
           ) : (

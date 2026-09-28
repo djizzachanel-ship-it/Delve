@@ -374,10 +374,10 @@ export const PoEDelveMineMap: React.FC<PoEDelveMineMapProps> = ({
                       stroke={isSelected ? "#38bdf8" : (isCurrentCart ? "#f59e0b" : theme.borderHex)}
                       strokeWidth={isSelected || isCurrentCart ? "3.5" : "2"}
                       filter={isSelected ? "url(#cyanGlow)" : (isCurrentCart ? "url(#goldGlow)" : undefined)}
-                      className="transition-transform duration-150 origin-center group-hover:scale-110 pointer-events-auto"
+                      className="transition-colors duration-150 pointer-events-auto"
                     />
 
-                    <g transform="translate(-9, -9)" className="pointer-events-none transition-transform duration-150 origin-center group-hover:scale-110">
+                    <g transform="translate(-9, -9)" className="pointer-events-none transition-transform duration-150 origin-center">
                       <NodeIconSvg type={node.type} color={isSelected ? "#38bdf8" : theme.color} size={18} />
                     </g>
 

@@ -1,6 +1,13 @@
 import { Reducer } from 'react';
 import { GameState, Item, ItemSlot, TownBuildings, TownBuff, BuildingType, TownPlot } from './types';
-import { craftItem, CRAFT_RECIPES, reforgeItemAffixes } from './game/craft';
+import { 
+  craftItem, 
+  CRAFT_RECIPES, 
+  reforgeItemAffixes,
+  addAffixToItem,
+  rerollSingleAffix,
+  rerollAffixValues
+} from './game/craft';
 import { calculatePlayerStats } from './game/player';
 import { 
   BUILDINGS_CONFIG, 
@@ -43,6 +50,9 @@ export type GameAction =
   | { type: 'COLLECT_PASSIVE' }
   | { type: 'SET_TOWN_BUFF'; mealId: string }
   | { type: 'REFORGE_ITEM'; item: Item }
+  | { type: 'CRAFT_ADD_AFFIX'; item: Item }
+  | { type: 'CRAFT_REROLL_AFFIX'; item: Item }
+  | { type: 'CRAFT_REROLL_VALUES'; item: Item }
   | { type: 'TOGGLE_SIEGE_MODE'; enabled?: boolean }
   | { type: 'RESET_GAME' };
 
@@ -282,12 +292,10 @@ const internalReducer: Reducer<GameState, GameAction> = (state, action) => {
       ) {
         // Dweller blacksmith bonus!
         const dwellerBonus = getForgeDwellerBonus(state.townPlots, state.dwellers);
+        // Note: Using current depth to match new signature
         const item = craftItem(
           action.payload.slot, 
-          tierIndex, 
-          forgeLvl,
-          dwellerBonus.statMultiplier,
-          dwellerBonus.bonusRareLuck
+          state.depth
         );
         return {
           ...state,
@@ -305,22 +313,15 @@ const internalReducer: Reducer<GameState, GameAction> = (state, action) => {
     case 'CRAFT': {
       const recipe = CRAFT_RECIPES[0];
       const cost = recipe.cost;
-      const forgeLvl = state.townPlots
-        ? getBuildingLevelFromPlots(state.townPlots, 'forge')
-        : (state.town?.forge || 1);
-
+      
       if (
         state.resources.ore >= cost.ore &&
         state.resources.metal >= cost.metal &&
         state.resources.shards >= cost.shards
       ) {
-        const dwellerBonus = getForgeDwellerBonus(state.townPlots, state.dwellers);
         const item = craftItem(
           action.slot, 
-          0, 
-          forgeLvl,
-          dwellerBonus.statMultiplier,
-          dwellerBonus.bonusRareLuck
+          state.depth
         );
         return {
           ...state,
@@ -847,6 +848,126 @@ const internalReducer: Reducer<GameState, GameAction> = (state, action) => {
             shards: state.resources.shards - cost.shards
           },
           inventory: state.inventory.map(i => i.id === action.item.id ? reforged : i)
+        };
+      }
+    }
+
+    case 'CRAFT_ADD_AFFIX': {
+      const cost = { ore: 20, metal: 12, shards: 1 };
+      if (
+        state.resources.ore < cost.ore ||
+        state.resources.metal < cost.metal ||
+        state.resources.shards < cost.shards
+      ) {
+        return state;
+      }
+
+      const result = addAffixToItem(action.item);
+      if (!result.success) return state;
+
+      const isEquipped = state.equipment[action.item.slot]?.id === action.item.id;
+      const updatedItem = result.item;
+
+      if (isEquipped) {
+        const newEquip = { ...state.equipment, [action.item.slot]: updatedItem };
+        return {
+          ...state,
+          resources: {
+            ore: state.resources.ore - cost.ore,
+            metal: state.resources.metal - cost.metal,
+            shards: state.resources.shards - cost.shards
+          },
+          equipment: newEquip
+        };
+      } else {
+        return {
+          ...state,
+          resources: {
+            ore: state.resources.ore - cost.ore,
+            metal: state.resources.metal - cost.metal,
+            shards: state.resources.shards - cost.shards
+          },
+          inventory: state.inventory.map(i => i.id === action.item.id ? updatedItem : i)
+        };
+      }
+    }
+
+    case 'CRAFT_REROLL_AFFIX': {
+      const cost = { ore: 15, metal: 8, shards: 1 };
+      if (
+        state.resources.ore < cost.ore ||
+        state.resources.metal < cost.metal ||
+        state.resources.shards < cost.shards
+      ) {
+        return state;
+      }
+
+      const result = rerollSingleAffix(action.item);
+      if (!result.success) return state;
+
+      const isEquipped = state.equipment[action.item.slot]?.id === action.item.id;
+      const updatedItem = result.item;
+
+      if (isEquipped) {
+        const newEquip = { ...state.equipment, [action.item.slot]: updatedItem };
+        return {
+          ...state,
+          resources: {
+            ore: state.resources.ore - cost.ore,
+            metal: state.resources.metal - cost.metal,
+            shards: state.resources.shards - cost.shards
+          },
+          equipment: newEquip
+        };
+      } else {
+        return {
+          ...state,
+          resources: {
+            ore: state.resources.ore - cost.ore,
+            metal: state.resources.metal - cost.metal,
+            shards: state.resources.shards - cost.shards
+          },
+          inventory: state.inventory.map(i => i.id === action.item.id ? updatedItem : i)
+        };
+      }
+    }
+
+    case 'CRAFT_REROLL_VALUES': {
+      const cost = { ore: 10, metal: 5, shards: 0 };
+      if (
+        state.resources.ore < cost.ore ||
+        state.resources.metal < cost.metal ||
+        state.resources.shards < cost.shards
+      ) {
+        return state;
+      }
+
+      const result = rerollAffixValues(action.item);
+      if (!result.success) return state;
+
+      const isEquipped = state.equipment[action.item.slot]?.id === action.item.id;
+      const updatedItem = result.item;
+
+      if (isEquipped) {
+        const newEquip = { ...state.equipment, [action.item.slot]: updatedItem };
+        return {
+          ...state,
+          resources: {
+            ore: state.resources.ore - cost.ore,
+            metal: state.resources.metal - cost.metal,
+            shards: state.resources.shards - cost.shards
+          },
+          equipment: newEquip
+        };
+      } else {
+        return {
+          ...state,
+          resources: {
+            ore: state.resources.ore - cost.ore,
+            metal: state.resources.metal - cost.metal,
+            shards: state.resources.shards - cost.shards
+          },
+          inventory: state.inventory.map(i => i.id === action.item.id ? updatedItem : i)
         };
       }
     }

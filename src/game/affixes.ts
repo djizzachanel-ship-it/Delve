@@ -1,4 +1,5 @@
 import { Item, ItemSlot, Rarity, ItemAffix } from '../types';
+import { calculateItemTier } from './craft';
 
 // ==========================================
 // BASE ITEMS BY SLOT & TIER
@@ -158,10 +159,47 @@ export const SUFFIX_TEMPLATES: AffixTemplate[] = [
 ];
 
 // ==========================================
+// AFFIX TIER CALCULATION
+// ==========================================
+export const MAX_AFFIX_TIER = 10;
+
+/**
+ * Calculates random Affix Tier (1–MAX_AFFIX_TIER) based on Item Tier (1–100):
+ * - Item T1: only lowest affix tier (T1).
+ * - Item T100: range expands from 1 to MAX_AFFIX_TIER (10).
+ * - Max possible Affix Tier = Math.min(MAX_AFFIX_TIER, Math.max(1, Math.ceil((itemTier / 100) * MAX_AFFIX_TIER))).
+ * - Min possible Affix Tier = 1 (gradually scaling floor up to 2-3 in deep endgame, but preserving roll variety).
+ */
+export function calculateAffixTier(itemTier: number = 1): number {
+  const safeItemTier = Math.min(100, Math.max(1, itemTier));
+  const maxAffixTier = Math.min(
+    MAX_AFFIX_TIER, 
+    Math.max(1, Math.ceil((safeItemTier / 100) * MAX_AFFIX_TIER))
+  );
+  
+  // At very high item tier (e.g. T80+), minimum affix tier can slightly bump up (1..3) while still keeping lower rolls possible
+  let minAffixTier = 1;
+  if (safeItemTier >= 80) {
+    minAffixTier = Math.random() < 0.3 ? 2 : 1;
+  } else if (safeItemTier >= 50) {
+    minAffixTier = 1;
+  }
+
+  // Roll randomly in range [minAffixTier, maxAffixTier]
+  const tierSpread = maxAffixTier - minAffixTier + 1;
+  return minAffixTier + Math.floor(Math.random() * Math.max(1, tierSpread));
+}
+
+// ==========================================
 // GENERATOR FUNCTION
 // ==========================================
-export function generateRPGItem(slot: ItemSlot, level: number = 0, forcedRarity?: Rarity): Item {
-  // 1. Determine Rarity
+export function generateRPGItem(slot: ItemSlot, levelOrDepth: number = 1, forcedRarity?: Rarity, forcedTier?: number): Item {
+  // 1. Calculate item tier (1-100) using depth-based formula
+  const itemTier = forcedTier !== undefined 
+    ? Math.min(100, Math.max(1, forcedTier))
+    : calculateItemTier(levelOrDepth);
+
+  // 2. Determine Rarity
   const rarities: { r: Rarity; chance: number }[] = [
     { r: 'common', chance: 0.50 },
     { r: 'magic', chance: 0.30 },
@@ -182,10 +220,10 @@ export function generateRPGItem(slot: ItemSlot, level: number = 0, forcedRarity?
     }
   }
 
-  // 2. Select Base Item according to level
-  const basePool = BASE_ITEMS[slot];
-  const tierIndex = Math.min(basePool.length - 1, Math.max(0, level));
-  const baseTemplate = basePool[tierIndex];
+  // 3. Select Base Item according to itemTier (1-100 -> 5 base item tiers)
+  const basePool = BASE_ITEMS[slot] || [];
+  const tierIndex = Math.min(basePool.length - 1, Math.floor((itemTier - 1) / 20));
+  const baseTemplate = basePool[tierIndex] || { name: 'Предмет', baseHp: 10, baseDmg: 5, baseArm: 2 };
 
   // Base Stats scaled by rarity & tier
   const rarityMultipliers: Record<Rarity, number> = {
@@ -195,17 +233,14 @@ export function generateRPGItem(slot: ItemSlot, level: number = 0, forcedRarity?
     epic: 1.50,
     legendary: 1.80
   };
-  const rMulti = rarityMultipliers[rarity] * (1 + level * 0.15);
+  const tierMultiplier = 1 + (itemTier - 1) * 0.04;
+  const rMulti = (rarityMultipliers[rarity] || 1.0) * tierMultiplier;
 
   let health = Math.round(baseTemplate.baseHp * rMulti);
   let damage = Math.round(baseTemplate.baseDmg * rMulti);
   let armor = Math.round(baseTemplate.baseArm * rMulti);
 
-  // 3. Roll Affixes according to Rarity:
-  // - Common: No affixes
-  // - Magic: 1 affix (50% prefix, 50% suffix)
-  // - Rare: 2 affixes (1 prefix + 1 suffix)
-  // - Epic: 2 affixes with elevated stats
+  // 4. Roll Affixes according to Rarity
   let prefix: ItemAffix | undefined = undefined;
   let suffix: ItemAffix | undefined = undefined;
 
@@ -216,100 +251,116 @@ export function generateRPGItem(slot: ItemSlot, level: number = 0, forcedRarity?
     const isPrefix = Math.random() > 0.5;
     if (isPrefix && validPrefixes.length > 0) {
       const template = validPrefixes[Math.floor(Math.random() * validPrefixes.length)];
+      const prefixAffixTier = calculateAffixTier(itemTier);
+      const affixScale = 1 + (prefixAffixTier - 1) * 0.15;
       let bonusVal = 0;
       if (template.stat === 'health') {
-        bonusVal = Math.max(4, Math.round(8 * template.multiplier * (1 + level * 0.2)));
+        bonusVal = Math.max(4, Math.round(6 * template.multiplier * affixScale * (1 + itemTier * 0.04)));
         health += bonusVal;
       } else if (template.stat === 'damage') {
-        bonusVal = Math.max(1, Math.round(2 * template.multiplier * (1 + level * 0.15)));
+        bonusVal = Math.max(1, Math.round(2 * template.multiplier * affixScale * (1 + itemTier * 0.03)));
         damage += bonusVal;
       } else if (template.stat === 'armor') {
-        bonusVal = Math.max(1, Math.round(1.2 * template.multiplier * (1 + level * 0.12)));
+        bonusVal = Math.max(1, Math.round(1.2 * template.multiplier * affixScale * (1 + itemTier * 0.025)));
         armor += bonusVal;
       }
 
       prefix = {
         name: template.name,
         type: 'prefix',
+        category: template.stat === 'damage' ? 'offensive' : template.stat === 'armor' ? 'defensive' : 'utility',
         stat: template.stat,
+        tier: prefixAffixTier,
         value: bonusVal,
-        description: `+${bonusVal} ${template.description}`
+        description: `+${bonusVal} ${template.description} (T${prefixAffixTier})`
       };
     } else if (validSuffixes.length > 0) {
       const template = validSuffixes[Math.floor(Math.random() * validSuffixes.length)];
+      const suffixAffixTier = calculateAffixTier(itemTier);
+      const affixScale = 1 + (suffixAffixTier - 1) * 0.15;
       let bonusVal = 0;
       if (template.stat === 'health') {
-        bonusVal = Math.max(4, Math.round(8 * template.multiplier * (1 + level * 0.2)));
+        bonusVal = Math.max(4, Math.round(6 * template.multiplier * affixScale * (1 + itemTier * 0.04)));
         health += bonusVal;
       } else if (template.stat === 'damage') {
-        bonusVal = Math.max(1, Math.round(2 * template.multiplier * (1 + level * 0.15)));
+        bonusVal = Math.max(1, Math.round(2 * template.multiplier * affixScale * (1 + itemTier * 0.03)));
         damage += bonusVal;
       } else if (template.stat === 'armor') {
-        bonusVal = Math.max(1, Math.round(1.2 * template.multiplier * (1 + level * 0.12)));
+        bonusVal = Math.max(1, Math.round(1.2 * template.multiplier * affixScale * (1 + itemTier * 0.025)));
         armor += bonusVal;
       }
 
       suffix = {
         name: template.name,
         type: 'suffix',
+        category: template.stat === 'damage' ? 'offensive' : template.stat === 'armor' ? 'defensive' : 'utility',
         stat: template.stat,
+        tier: suffixAffixTier,
         value: bonusVal,
-        description: `+${bonusVal} ${template.description}`
+        description: `+${bonusVal} ${template.description} (T${suffixAffixTier})`
       };
     }
-  } else if (rarity === 'rare' || rarity === 'epic') {
-    const epicBonus = rarity === 'epic' ? 1.3 : 1.0;
+  } else if (rarity === 'rare' || rarity === 'epic' || (rarity as string) === 'legendary') {
+    const epicBonus = rarity === 'epic' ? 1.25 : rarity === 'legendary' ? 1.5 : 1.0;
 
     // Pick Prefix
     if (validPrefixes.length > 0) {
       const template = validPrefixes[Math.floor(Math.random() * validPrefixes.length)];
+      const prefixAffixTier = calculateAffixTier(itemTier);
+      const affixScale = 1 + (prefixAffixTier - 1) * 0.15;
       let bonusVal = 0;
       if (template.stat === 'health') {
-        bonusVal = Math.max(6, Math.round(12 * template.multiplier * (1 + level * 0.25) * epicBonus));
+        bonusVal = Math.max(6, Math.round(8 * template.multiplier * affixScale * (1 + itemTier * 0.04) * epicBonus));
         health += bonusVal;
       } else if (template.stat === 'damage') {
-        bonusVal = Math.max(2, Math.round(3 * template.multiplier * (1 + level * 0.2) * epicBonus));
+        bonusVal = Math.max(2, Math.round(3 * template.multiplier * affixScale * (1 + itemTier * 0.03) * epicBonus));
         damage += bonusVal;
       } else if (template.stat === 'armor') {
-        bonusVal = Math.max(1, Math.round(1.8 * template.multiplier * (1 + level * 0.15) * epicBonus));
+        bonusVal = Math.max(1, Math.round(1.5 * template.multiplier * affixScale * (1 + itemTier * 0.025) * epicBonus));
         armor += bonusVal;
       }
 
       prefix = {
         name: template.name,
         type: 'prefix',
+        category: template.stat === 'damage' ? 'offensive' : template.stat === 'armor' ? 'defensive' : 'utility',
         stat: template.stat,
+        tier: prefixAffixTier,
         value: bonusVal,
-        description: `+${bonusVal} ${template.description}`
+        description: `+${bonusVal} ${template.description} (T${prefixAffixTier})`
       };
     }
 
     // Pick Suffix
     if (validSuffixes.length > 0) {
       const template = validSuffixes[Math.floor(Math.random() * validSuffixes.length)];
+      const suffixAffixTier = calculateAffixTier(itemTier);
+      const affixScale = 1 + (suffixAffixTier - 1) * 0.15;
       let bonusVal = 0;
       if (template.stat === 'health') {
-        bonusVal = Math.max(6, Math.round(12 * template.multiplier * (1 + level * 0.25) * epicBonus));
+        bonusVal = Math.max(6, Math.round(8 * template.multiplier * affixScale * (1 + itemTier * 0.04) * epicBonus));
         health += bonusVal;
       } else if (template.stat === 'damage') {
-        bonusVal = Math.max(2, Math.round(3 * template.multiplier * (1 + level * 0.2) * epicBonus));
+        bonusVal = Math.max(2, Math.round(3 * template.multiplier * affixScale * (1 + itemTier * 0.03) * epicBonus));
         damage += bonusVal;
       } else if (template.stat === 'armor') {
-        bonusVal = Math.max(1, Math.round(1.8 * template.multiplier * (1 + level * 0.15) * epicBonus));
+        bonusVal = Math.max(1, Math.round(1.5 * template.multiplier * affixScale * (1 + itemTier * 0.025) * epicBonus));
         armor += bonusVal;
       }
 
       suffix = {
         name: template.name,
         type: 'suffix',
+        category: template.stat === 'damage' ? 'offensive' : template.stat === 'armor' ? 'defensive' : 'utility',
         stat: template.stat,
+        tier: suffixAffixTier,
         value: bonusVal,
-        description: `+${bonusVal} ${template.description}`
+        description: `+${bonusVal} ${template.description} (T${suffixAffixTier})`
       };
     }
   }
 
-  // 4. Construct Display Name & Set Item Roll
+  // 5. Construct Display Name & Set Item Roll
   let finalName = baseTemplate.name;
   if (prefix && suffix) {
     finalName = `${prefix.name} ${baseTemplate.name} ${suffix.name}`;
@@ -337,14 +388,14 @@ export function generateRPGItem(slot: ItemSlot, level: number = 0, forcedRarity?
     baseName: baseTemplate.name,
     slot,
     rarity,
+    tier: itemTier,
     stats: {
       health,
       damage,
       armor
     },
-    prefix,
-    suffix,
-    level: level + 1,
+    prefixes: prefix ? [prefix] : [],
+    suffixes: suffix ? [suffix] : [],
     setId,
     setName
   };

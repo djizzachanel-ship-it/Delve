@@ -454,7 +454,7 @@ export function BuildingDetailModal({
                         <div>
                           <div className="text-xs font-bold text-slate-200">{item.name}</div>
                           <div className="text-[10px] text-slate-400">
-                            Аффиксы: {[item.prefix?.name, item.suffix?.name].filter(Boolean).join(', ') || 'нет'}
+                            Аффиксы: {[...item.prefixes, ...item.suffixes].map(a => a.name).join(', ') || 'нет'}
                           </div>
                         </div>
                         <button
