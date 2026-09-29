@@ -54,6 +54,8 @@ export type GameAction =
   | { type: 'CRAFT_REROLL_AFFIX'; item: Item }
   | { type: 'CRAFT_REROLL_VALUES'; item: Item }
   | { type: 'TOGGLE_SIEGE_MODE'; enabled?: boolean }
+  | { type: 'SET_DELVE_GRID'; payload: any }
+  | { type: 'SAVE_GAME' }
   | { type: 'RESET_GAME' };
 
 export const CART_MODULE_COSTS = {
@@ -63,51 +65,75 @@ export const CART_MODULE_COSTS = {
 };
 
 export const SAVE_GAME_KEY = 'underground_cart_save_v3';
+export const ALL_SAVE_KEYS = [
+  'underground_cart_save_v3',
+  'underground_cart_save_v2',
+  'underground_cart_save_v1',
+  'mine_game_save',
+  'delve_cart_save'
+];
 
-export const defaultInitialState: GameState = {
-  player: { baseHealth: 55, health: 55, baseDamage: 7, baseArmor: 1, level: 1, xp: 0 },
-  resources: { ore: 35, metal: 18, shards: 1 },
-  inventory: [],
-  equipment: { 
-    head: null, 
-    chest: null, 
-    legs: null, 
-    boots: null, 
-    weapon: null, 
-    offhand: null, 
-    amulet: null, 
-    ring: null 
-  },
-  unlockedDepth: 0, 
-  depth: 0,
-  cartModules: {
-    searchlight: false,
-    turret: false,
-    magnet: false
-  },
-  town: {
-    forge: 1,
-    smelter: 1,
-    tavern: 1,
-    guild: 0,
-    workshop: 0,
-    barracks: 1,
-    watchtower: 0
-  },
-  townPlots: createDefaultPlots(),
-  dwellers: INITIAL_DWELLERS,
-  candidateDwellers: [],
-  lastDwellerArrival: Date.now(),
-  activeTownBuff: null,
-  lastCollectTime: Date.now()
-};
+export function createFreshInitialState(): GameState {
+  return {
+    player: { baseHealth: 55, health: 55, baseDamage: 7, baseArmor: 1, level: 1, xp: 0 },
+    resources: { ore: 35, metal: 18, shards: 1 },
+    inventory: [],
+    equipment: { 
+      head: null, 
+      chest: null, 
+      legs: null, 
+      boots: null, 
+      weapon: null, 
+      offhand: null, 
+      amulet: null, 
+      ring: null 
+    },
+    unlockedDepth: 0, 
+    depth: 0,
+    cartModules: {
+      searchlight: false,
+      turret: false,
+      magnet: false
+    },
+    town: {
+      forge: 1,
+      smelter: 1,
+      tavern: 1,
+      guild: 0,
+      workshop: 0,
+      barracks: 1,
+      watchtower: 0
+    },
+    townPlots: createDefaultPlots(),
+    dwellers: [...INITIAL_DWELLERS],
+    candidateDwellers: [],
+    lastDwellerArrival: Date.now(),
+    activeTownBuff: null,
+    lastCollectTime: Date.now(),
+    lastSaveTime: Date.now(),
+    delveGrid: null
+  };
+}
+
+export const defaultInitialState: GameState = createFreshInitialState();
 
 export function loadSavedState(): GameState {
+  if (typeof window === 'undefined') return createFreshInitialState();
   try {
-    const raw = localStorage.getItem(SAVE_GAME_KEY) || localStorage.getItem('underground_cart_save_v2');
+    let raw: string | null = null;
+    for (const key of ALL_SAVE_KEYS) {
+      const data = localStorage.getItem(key);
+      if (data) {
+        raw = data;
+        break;
+      }
+    }
+
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.player && parsed.resources) {
+      if (parsed && typeof parsed === 'object') {
+        const fresh = createFreshInitialState();
+
         // Migration to plots if missing
         let plots: TownPlot[] = Array.isArray(parsed.townPlots) ? parsed.townPlots : createDefaultPlots();
         const hasTownHall = plots.some(p => p.buildingType === 'town_hall');
@@ -149,37 +175,53 @@ export function loadSavedState(): GameState {
             maxHp: p.maxHp !== undefined ? p.maxHp : (defStats?.maxHp || 800),
           };
         });
-        let dwellers: Dweller[] = Array.isArray(parsed.dwellers) && parsed.dwellers.length > 0 ? parsed.dwellers : INITIAL_DWELLERS;
+        const dwellers: Dweller[] = Array.isArray(parsed.dwellers) && parsed.dwellers.length > 0 ? parsed.dwellers : [...INITIAL_DWELLERS];
 
-        return {
-          ...defaultInitialState,
+        const merged: GameState = {
+          ...fresh,
           ...parsed,
-          player: { ...defaultInitialState.player, ...parsed.player },
-          resources: { ...defaultInitialState.resources, ...parsed.resources },
-          equipment: { ...defaultInitialState.equipment, ...(parsed.equipment || {}) },
-          cartModules: { ...defaultInitialState.cartModules, ...(parsed.cartModules || {}) },
-          town: { ...defaultInitialState.town, ...(parsed.town || {}) },
+          player: { ...fresh.player, ...(parsed.player || {}) },
+          resources: { ...fresh.resources, ...(parsed.resources || {}) },
+          equipment: { ...fresh.equipment, ...(parsed.equipment || {}) },
+          cartModules: { ...fresh.cartModules, ...(parsed.cartModules || {}) },
+          town: { ...fresh.town, ...(parsed.town || {}) },
           townPlots: plots,
           dwellers: dwellers,
           candidateDwellers: Array.isArray(parsed.candidateDwellers) ? parsed.candidateDwellers : [],
           lastDwellerArrival: parsed.lastDwellerArrival || Date.now(),
           activeTownBuff: parsed.activeTownBuff || null,
           lastCollectTime: parsed.lastCollectTime || Date.now(),
-          inventory: Array.isArray(parsed.inventory) ? parsed.inventory : []
+          inventory: Array.isArray(parsed.inventory) ? parsed.inventory : [],
+          unlockedDepth: typeof parsed.unlockedDepth === 'number' ? parsed.unlockedDepth : 0,
+          depth: typeof parsed.depth === 'number' ? parsed.depth : 0,
+          delveGrid: parsed.delveGrid || null,
+          lastSaveTime: Date.now()
         };
+
+        // Guarantee active storage format
+        try {
+          localStorage.setItem(SAVE_GAME_KEY, JSON.stringify(merged));
+        } catch (e) {}
+
+        return merged;
       }
     }
   } catch (e) {
     console.error('Failed to load saved state:', e);
   }
-  return defaultInitialState;
+  return createFreshInitialState();
 }
 
 export function saveStateToStorage(state: GameState) {
+  if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(SAVE_GAME_KEY, JSON.stringify(state));
+    const toSave = {
+      ...state,
+      lastSaveTime: Date.now()
+    };
+    localStorage.setItem(SAVE_GAME_KEY, JSON.stringify(toSave));
   } catch (e) {
-    console.error('Failed to save state:', e);
+    console.error('Failed to save state to localStorage:', e);
   }
 }
 
@@ -189,11 +231,33 @@ export const initialState: GameState = loadSavedState();
 const internalReducer: Reducer<GameState, GameAction> = (state, action) => {
   switch (action.type) {
     case 'RESET_GAME': {
+      if (typeof window !== 'undefined') {
+        for (const key of ALL_SAVE_KEYS) {
+          try {
+            localStorage.removeItem(key);
+          } catch (e) {}
+        }
+      }
+      const freshState = createFreshInitialState();
       try {
-        localStorage.removeItem(SAVE_GAME_KEY);
-        localStorage.removeItem('underground_cart_save_v1');
+        localStorage.setItem(SAVE_GAME_KEY, JSON.stringify(freshState));
       } catch (e) {}
-      return defaultInitialState;
+      return freshState;
+    }
+
+    case 'SET_DELVE_GRID': {
+      return {
+        ...state,
+        delveGrid: action.payload,
+        lastSaveTime: Date.now()
+      };
+    }
+
+    case 'SAVE_GAME': {
+      return {
+        ...state,
+        lastSaveTime: Date.now()
+      };
     }
     case 'SYNC_GAME': {
       return {

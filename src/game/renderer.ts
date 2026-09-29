@@ -1,7 +1,7 @@
 import { GameEngineState, Enemy, MiningNode, Loot, Slash, FloatingText, Torch } from './types';
 import { project } from './mine';
 import { TILE_SIZE, MAP_COLS, MAP_ROWS } from './config';
-import { renderEntityCanvas } from '../assetRegistry';
+import { renderEntityCanvas, preloadImage } from '../assetRegistry';
 
 export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stats: { maxHealth: number }) => {
   ctx.fillStyle = '#020617';
@@ -267,6 +267,7 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
         // -----------------------------------------------------------
         // D. WALL TOP CAP (Isometric Plateau / Carved Slab)
         // -----------------------------------------------------------
+        const wallImg = preloadImage('/src/assets/images/wall.png');
         ctx.beginPath();
         ctx.moveTo(cTop.x, cTop.y);
         ctx.lineTo(cRight.x, cRight.y);
@@ -274,19 +275,30 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
         ctx.lineTo(cLeft.x, cLeft.y);
         ctx.closePath();
 
-        // Top cap stone gradient (soft diagonal light from top-left)
-        const capGrad = ctx.createLinearGradient(cLeft.x, cTop.y, cRight.x, cBottom.y);
-        if (isDeepInterior) {
-          capGrad.addColorStop(0, '#192231');
-          capGrad.addColorStop(0.5, '#141c28');
-          capGrad.addColorStop(1, '#0e141e');
+        if (wallImg && wallImg.complete && wallImg.naturalWidth > 0) {
+          ctx.save();
+          ctx.clip();
+          ctx.drawImage(wallImg, cLeft.x, cTop.y, 4*s, wallH + s);
+          if (isDeepInterior) {
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fill();
+          }
+          ctx.restore();
         } else {
-          capGrad.addColorStop(0, '#38485e');
-          capGrad.addColorStop(0.4, '#2e3c4e');
-          capGrad.addColorStop(1, '#232f3f');
+          // Top cap stone gradient (soft diagonal light from top-left)
+          const capGrad = ctx.createLinearGradient(cLeft.x, cTop.y, cRight.x, cBottom.y);
+          if (isDeepInterior) {
+            capGrad.addColorStop(0, '#192231');
+            capGrad.addColorStop(0.5, '#141c28');
+            capGrad.addColorStop(1, '#0e141e');
+          } else {
+            capGrad.addColorStop(0, '#38485e');
+            capGrad.addColorStop(0.4, '#2e3c4e');
+            capGrad.addColorStop(1, '#232f3f');
+          }
+          ctx.fillStyle = capGrad;
+          ctx.fill();
         }
-        ctx.fillStyle = capGrad;
-        ctx.fill();
 
         // Stone bevel highlight borders
         ctx.strokeStyle = isDeepInterior ? '#101722' : '#475a74';
@@ -420,6 +432,7 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
         // -----------------------------------------------------------
         // A. ISOMETRIC STONE CAVERN FLOOR TILE
         // -----------------------------------------------------------
+        const floorImg = preloadImage('/src/assets/images/floor.png');
         ctx.beginPath(); 
         ctx.moveTo(ix, iy - s); 
         ctx.lineTo(ix + 2*s, iy); 
@@ -427,10 +440,17 @@ export const drawGame = (ctx: CanvasRenderingContext2D, g: GameEngineState, stat
         ctx.lineTo(ix - 2*s, iy); 
         ctx.closePath();
         
-        // Deep stone flagstone tones with subtle variance
-        const floorBaseColor = h0 > 0.65 ? '#1a202c' : h0 > 0.3 ? '#161b26' : '#121620';
-        ctx.fillStyle = floorBaseColor;
-        ctx.fill();
+        if (floorImg && floorImg.complete && floorImg.naturalWidth > 0) {
+          ctx.save();
+          ctx.clip();
+          ctx.drawImage(floorImg, ix - 2*s, iy - s, 4*s, 2*s);
+          ctx.restore();
+        } else {
+          // Deep stone flagstone tones with subtle variance
+          const floorBaseColor = h0 > 0.65 ? '#1a202c' : h0 > 0.3 ? '#161b26' : '#121620';
+          ctx.fillStyle = floorBaseColor;
+          ctx.fill();
+        }
 
         // Subtle tile seam / mortar groove
         ctx.strokeStyle = '#0b0f17'; 

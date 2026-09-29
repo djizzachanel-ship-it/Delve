@@ -165,6 +165,8 @@ export interface GameState {
   lastDwellerArrival: number;
   activeTownBuff?: TownBuff | null;
   lastCollectTime?: number;
+  lastSaveTime?: number;
   isSiegeMode?: boolean; // Флаг режима осады / обороны города (Tower Defense)
+  delveGrid?: any; // Сохраненная карта глубин Delve
 }
 

@@ -85,8 +85,19 @@ export function MineTab({ state, dispatch, isActive, onReturnToTown, autoStartTr
   } | null>(null);
 
   // PoE Delve Subterranean Chart state
-  const [delveGrid, setDelveGrid] = useState<DelveGridGraph | undefined>(undefined);
+  const [delveGrid, setDelveGrid] = useState<DelveGridGraph | undefined>(state.delveGrid || undefined);
   const [activeDelveNode, setActiveDelveNode] = useState<DelveNode | null>(null);
+
+  useEffect(() => {
+    if (state.delveGrid) {
+      setDelveGrid(state.delveGrid);
+    }
+  }, [state.delveGrid]);
+
+  const handleUpdateGrid = (newGrid: DelveGridGraph) => {
+    setDelveGrid(newGrid);
+    dispatch({ type: 'SET_DELVE_GRID', payload: newGrid });
+  };
 
   const handleSelectNodeAndStart = (node: DelveNode) => {
     setActiveDelveNode(node);
@@ -253,6 +264,7 @@ export function MineTab({ state, dispatch, isActive, onReturnToTown, autoStartTr
       if (activeDelveNode && delveGrid) {
         const updated = markDelveNodeCleared(delveGrid, activeDelveNode.id);
         setDelveGrid(updated);
+        dispatch({ type: 'SET_DELVE_GRID', payload: updated });
       }
     } else {
       dispatch({ type: 'DIE', payload: { maxHealth: stats.maxHealth } });
@@ -466,7 +478,7 @@ export function MineTab({ state, dispatch, isActive, onReturnToTown, autoStartTr
             <PoEDelveMineMap
               state={state}
               savedGrid={delveGrid}
-              onUpdateGrid={setDelveGrid}
+              onUpdateGrid={handleUpdateGrid}
               onSelectNodeAndStart={handleSelectNodeAndStart}
               onReturnToTown={onReturnToTown}
               onBuyModule={handleBuyModule}

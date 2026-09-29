@@ -5,10 +5,6 @@
 
 import React from 'react';
 
-// ==========================================
-// 1. ASSET TYPE DEFINITIONS
-// ==========================================
-
 export type AssetCategory = 'monster' | 'boss' | 'hero' | 'node' | 'tower' | 'prop';
 
 export type AssetType = 'image' | 'canvas' | 'svg' | 'model_3d' | 'component';
@@ -581,6 +577,59 @@ export const ASSET_REGISTRY: Record<string, EntityAsset> = {
     scale: 1.0,
     render: renderHeroMinerCanvas,
     shadow: { radiusX: 16, radiusY: 8, opacity: 0.55 },
+  },
+
+  // --- ENVIRONMENT TILES ---
+  wall: {
+    id: 'wall',
+    name: 'Стена Шахты',
+    category: 'prop',
+    type: 'canvas',
+    scale: 1.0,
+    render: ({ ctx, x, y, scale = 1 }) => {
+      const s = scale;
+      // Stone wall block
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.moveTo(x, y - 24 * s);
+      ctx.lineTo(x + 24 * s, y - 12 * s);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x - 24 * s, y - 12 * s);
+      ctx.closePath();
+      ctx.fill();
+
+      // Front wall faces
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.moveTo(x - 24 * s, y - 12 * s);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x, y + 20 * s);
+      ctx.lineTo(x - 24 * s, y + 8 * s);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 24 * s, y - 12 * s);
+      ctx.lineTo(x + 24 * s, y + 8 * s);
+      ctx.lineTo(x, y + 20 * s);
+      ctx.closePath();
+      ctx.fill();
+    },
+    shadow: { radiusX: 20, radiusY: 10, opacity: 0.5 }
+  },
+
+  floor: {
+    id: 'floor',
+    name: 'Пол Шахты',
+    category: 'prop',
+    type: 'canvas',
+    scale: 1.0,
+    render: ({ ctx, x, y, scale = 1 }) => {
+      ctx.fillStyle = '#161d27';
+      ctx.fillRect(x - 20 * scale, y - 10 * scale, 40 * scale, 20 * scale);
+    }
   },
 
   // --- MINING NODES ---
